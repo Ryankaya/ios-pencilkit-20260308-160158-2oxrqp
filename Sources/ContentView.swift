@@ -29,6 +29,7 @@ struct ContentView: View {
     @State private var selectedPlayerID: UUID?
     @State private var notes: String = "Kickoff lineup loaded. Draw pressing lines, passing lanes, and defensive shape."
     @State private var isControlSheetPresented = false
+    @State private var didInitializeScreen = false
 
     var body: some View {
         NavigationStack {
@@ -105,6 +106,12 @@ struct ContentView: View {
                 if mode == .draw {
                     selectedPlayerID = nil
                 }
+            }
+            .onAppear {
+                guard !didInitializeScreen else { return }
+                didInitializeScreen = true
+                canvasView.drawing = PKDrawing()
+                applyKickoffLineup()
             }
         }
     }
