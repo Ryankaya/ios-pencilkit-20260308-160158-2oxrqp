@@ -1,40 +1,48 @@
 # Soccer Game Planner (PencilKit)
 
-A practical SwiftUI iOS tactics board for soccer coaches and players.
+A practical iOS tactics app focused on soccer planning.
 
-The app combines a **soccer field planner** with **PencilKit drawing** so you can quickly place players, sketch movement, and annotate strategy in one screen.
+This version is redesigned to support **both teams (home + opponent)**, configurable team sizes (like **11v11**, **8v8**), and a cleaner **menu/sheet-driven UI** so controls are hidden until needed.
 
-## What It Does
+## Core Features
 
-- Soccer field background with marked pitch lines.
-- Draggable player markers on top of the field.
-- Editable player numbers (`1...99`) and team color (Home/Away).
-- Formation presets: `4-3-3`, `4-4-2`, `3-5-2`.
-- Rich drawing tools powered by PencilKit:
-  - Draw mode with ink type (Pen, Pencil, Marker, Monoline)
-  - Color picker
-  - Stroke width and opacity controls
-  - Eraser mode
-  - Lasso mode
-  - Undo / Redo
-  - Clear drawing layer
-- Tactical notes panel for extra details.
+- Accurate soccer field background with pitch markings.
+- Two-team planning on the same field:
+  - Home team markers
+  - Opponent team markers
+- Configurable team sizes (`5...11` each) for formats such as:
+  - `11v11`
+  - `9v9`
+  - `8v8`
+  - `7v7`
+  - `5v5`
+- Draggable numbered players with editable number and team.
+- Compact UI with opener sheets:
+  - `Teams` sheet for size/preset/actions
+  - `Tools` sheet for drawing setup
+- PencilKit tactical drawing:
+  - Ink / Eraser / Lasso
+  - Ink type, color, width, opacity
+  - Undo / Redo / Clear drawing
+- Notes section for tactical details.
 
-## Why This Is Practical
+## Why This Matches the Request
 
-- Build game plans before training sessions.
-- Draw passing lanes, pressing triggers, and defensive shape.
-- Adjust formation and player roles in real time during meetings.
+- The planner is now explicitly soccer-field-first.
+- Opponent team planning is enabled by default.
+- Team-size formats are configurable, including 11v11 and 8v8.
+- Unnecessary always-visible buttons were removed from the main screen.
+- Controls are hidden behind opener-style sheets for cleaner interaction.
 
 ## Apple Documentation Links
 
 - https://developer.apple.com/documentation/pencilkit
 - https://developer.apple.com/documentation/pencilkit/pkcanvasview
 - https://developer.apple.com/documentation/pencilkit/pkinkingtool
-- https://developer.apple.com/documentation/swiftui/draggesture
+- https://developer.apple.com/documentation/swiftui/sheet
 
 ## Run
 
 1. `xcodegen generate`
-2. Open `ios-pencilkit-20260308-160158-2oxrqp.xcodeproj` in Xcode.
+2. Open `ios-pencilkit-20260308-160158-2oxrqp.xcodeproj`.
 3. Run on iOS 17+ simulator/device.
