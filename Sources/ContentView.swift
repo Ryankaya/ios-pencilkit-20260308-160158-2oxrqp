@@ -448,11 +448,18 @@ struct SoccerFieldView: View {
             }
 
             let fieldRect = canvasRect.insetBy(dx: 8, dy: 8)
-            context.stroke(
-                SoccerPitchPathBuilder.markings(in: fieldRect, includeHalfwayLine: true),
-                with: .color(.white.opacity(0.95)),
-                lineWidth: 2
-            )
+            let strokeStyle = StrokeStyle(lineWidth: 2)
+            let white = GraphicsContext.Shading.color(.white.opacity(0.95))
+
+            context.stroke(Path(fieldRect), with: white, style: strokeStyle)
+            context.stroke(SoccerPitchPathBuilder.halfwayLine(in: fieldRect), with: white, style: strokeStyle)
+            context.stroke(SoccerPitchPathBuilder.centerCircle(in: fieldRect), with: white, style: strokeStyle)
+            context.stroke(SoccerPitchPathBuilder.topPenaltyArea(in: fieldRect), with: white, style: strokeStyle)
+            context.stroke(SoccerPitchPathBuilder.bottomPenaltyArea(in: fieldRect), with: white, style: strokeStyle)
+            context.stroke(SoccerPitchPathBuilder.topGoalArea(in: fieldRect), with: white, style: strokeStyle)
+            context.stroke(SoccerPitchPathBuilder.bottomGoalArea(in: fieldRect), with: white, style: strokeStyle)
+            context.stroke(SoccerPitchPathBuilder.topPenaltyArc(in: fieldRect), with: white, style: strokeStyle)
+            context.stroke(SoccerPitchPathBuilder.bottomPenaltyArc(in: fieldRect), with: white, style: strokeStyle)
             context.fill(SoccerPitchPathBuilder.spots(in: fieldRect), with: .color(.white))
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -471,69 +478,83 @@ enum SoccerPitchMetrics {
 }
 
 enum SoccerPitchPathBuilder {
-    static func markings(in rect: CGRect, includeHalfwayLine: Bool) -> Path {
+    static func halfwayLine(in rect: CGRect) -> Path {
         var path = Path()
+        let halfwayY = y(52.5, in: rect)
+        path.move(to: CGPoint(x: rect.minX, y: halfwayY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: halfwayY))
+        return path
+    }
 
-        let fieldRect = rect
-
-        path.addRect(fieldRect)
-
-        if includeHalfwayLine {
-            let halfwayY = y(52.5, in: fieldRect)
-            path.move(to: CGPoint(x: fieldRect.minX, y: halfwayY))
-            path.addLine(to: CGPoint(x: fieldRect.maxX, y: halfwayY))
-        }
-
-        let centerRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: fieldRect)
-        let center = CGPoint(x: x(34, in: fieldRect), y: y(52.5, in: fieldRect))
+    static func centerCircle(in rect: CGRect) -> Path {
+        var path = Path()
+        let centerRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: rect)
+        let center = CGPoint(x: x(34, in: rect), y: y(52.5, in: rect))
         path.addEllipse(in: CGRect(
             x: center.x - centerRadius,
             y: center.y - centerRadius,
             width: centerRadius * 2,
             height: centerRadius * 2
         ))
+        return path
+    }
 
+    static func topPenaltyArea(in rect: CGRect) -> Path {
+        var path = Path()
         let penaltyLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.penaltyAreaWidth) / 2
+        path.addRect(CGRect(
+            x: x(penaltyLeftX, in: rect),
+            y: y(0, in: rect),
+            width: scaleX(SoccerPitchMetrics.penaltyAreaWidth, in: rect),
+            height: scaleY(SoccerPitchMetrics.penaltyAreaDepth, in: rect)
+        ))
+        return path
+    }
+
+    static func bottomPenaltyArea(in rect: CGRect) -> Path {
+        var path = Path()
+        let penaltyLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.penaltyAreaWidth) / 2
+        path.addRect(CGRect(
+            x: x(penaltyLeftX, in: rect),
+            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyAreaDepth, in: rect),
+            width: scaleX(SoccerPitchMetrics.penaltyAreaWidth, in: rect),
+            height: scaleY(SoccerPitchMetrics.penaltyAreaDepth, in: rect)
+        ))
+        return path
+    }
+
+    static func topGoalArea(in rect: CGRect) -> Path {
+        var path = Path()
         let goalLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.goalAreaWidth) / 2
-
         path.addRect(CGRect(
-            x: x(penaltyLeftX, in: fieldRect),
-            y: y(0, in: fieldRect),
-            width: scaleX(SoccerPitchMetrics.penaltyAreaWidth, in: fieldRect),
-            height: scaleY(SoccerPitchMetrics.penaltyAreaDepth, in: fieldRect)
+            x: x(goalLeftX, in: rect),
+            y: y(0, in: rect),
+            width: scaleX(SoccerPitchMetrics.goalAreaWidth, in: rect),
+            height: scaleY(SoccerPitchMetrics.goalAreaDepth, in: rect)
         ))
+        return path
+    }
 
+    static func bottomGoalArea(in rect: CGRect) -> Path {
+        var path = Path()
+        let goalLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.goalAreaWidth) / 2
         path.addRect(CGRect(
-            x: x(penaltyLeftX, in: fieldRect),
-            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyAreaDepth, in: fieldRect),
-            width: scaleX(SoccerPitchMetrics.penaltyAreaWidth, in: fieldRect),
-            height: scaleY(SoccerPitchMetrics.penaltyAreaDepth, in: fieldRect)
+            x: x(goalLeftX, in: rect),
+            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.goalAreaDepth, in: rect),
+            width: scaleX(SoccerPitchMetrics.goalAreaWidth, in: rect),
+            height: scaleY(SoccerPitchMetrics.goalAreaDepth, in: rect)
         ))
+        return path
+    }
 
-        path.addRect(CGRect(
-            x: x(goalLeftX, in: fieldRect),
-            y: y(0, in: fieldRect),
-            width: scaleX(SoccerPitchMetrics.goalAreaWidth, in: fieldRect),
-            height: scaleY(SoccerPitchMetrics.goalAreaDepth, in: fieldRect)
-        ))
-
-        path.addRect(CGRect(
-            x: x(goalLeftX, in: fieldRect),
-            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.goalAreaDepth, in: fieldRect),
-            width: scaleX(SoccerPitchMetrics.goalAreaWidth, in: fieldRect),
-            height: scaleY(SoccerPitchMetrics.goalAreaDepth, in: fieldRect)
-        ))
-
+    static func topPenaltyArc(in rect: CGRect) -> Path {
+        var path = Path()
         let topPenaltyCenter = CGPoint(
-            x: x(SoccerPitchMetrics.width / 2, in: fieldRect),
-            y: y(SoccerPitchMetrics.penaltyMarkDistance, in: fieldRect)
-        )
-        let bottomPenaltyCenter = CGPoint(
-            x: x(SoccerPitchMetrics.width / 2, in: fieldRect),
-            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyMarkDistance, in: fieldRect)
+            x: x(SoccerPitchMetrics.width / 2, in: rect),
+            y: y(SoccerPitchMetrics.penaltyMarkDistance, in: rect)
         )
 
-        let arcRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: fieldRect)
+        let arcRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: rect)
         let deltaY = SoccerPitchMetrics.penaltyAreaDepth - SoccerPitchMetrics.penaltyMarkDistance
         let angle = Angle(radians: Double(asin(deltaY / SoccerPitchMetrics.centerCircleRadius)))
 
@@ -544,7 +565,18 @@ enum SoccerPitchPathBuilder {
             endAngle: .degrees(180) - angle,
             clockwise: false
         )
+        return path
+    }
 
+    static func bottomPenaltyArc(in rect: CGRect) -> Path {
+        var path = Path()
+        let bottomPenaltyCenter = CGPoint(
+            x: x(SoccerPitchMetrics.width / 2, in: rect),
+            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyMarkDistance, in: rect)
+        )
+        let arcRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: rect)
+        let deltaY = SoccerPitchMetrics.penaltyAreaDepth - SoccerPitchMetrics.penaltyMarkDistance
+        let angle = Angle(radians: Double(asin(deltaY / SoccerPitchMetrics.centerCircleRadius)))
         path.addArc(
             center: bottomPenaltyCenter,
             radius: arcRadius,
@@ -552,7 +584,6 @@ enum SoccerPitchPathBuilder {
             endAngle: .degrees(360) - angle,
             clockwise: false
         )
-
         return path
     }
 
