@@ -3,28 +3,89 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0DE77D37661DE9DBFA489779 /* TacticsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D03BD6E24A77611208A0D6 /* TacticsModels.swift */; };
+		10B210427733E925F3B6581D /* LineupFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E1349377E1BC84E044CDAC /* LineupFactory.swift */; };
+		119693D8B8BC61C39BBD6864 /* SoccerPitchGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 008492105DA592F68885E06C /* SoccerPitchGeometry.swift */; };
+		12DAEE057F7F45E9F3D098F6 /* PlayerMarkerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 682E58930512C64D8B836A9D /* PlayerMarkerView.swift */; };
+		203FD4FBAEEE88F351181412 /* DrawSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29EA06729DF9FEBDE0138DC6 /* DrawSettingsSheet.swift */; };
 		7ABB1F012C632222C9860A75 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A65DE4B5332700B798B5F09 /* ContentView.swift */; };
+		7DFB4ACDE986BCB49DAA5A53 /* PencilCanvasRepresentable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB3FA806157216CD6A8FA0D /* PencilCanvasRepresentable.swift */; };
+		ADAAF476A957180B73083AE1 /* PlayerSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96CA919B42AF73118E04C281 /* PlayerSettingsSheet.swift */; };
 		CDE005A3E55011CC4294215D /* ios-pencilkit-20260308-160158-2oxrqpApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CC1EE1E5520D8189DF4295 /* ios-pencilkit-20260308-160158-2oxrqpApp.swift */; };
+		D5ABE7C23E2B79B3ACC2A19E /* IconControlButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A620FCB0B51C782B28E7A03 /* IconControlButton.swift */; };
+		D9E1CF252AB459FB4864D916 /* SoccerFieldView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31990074DF753B7E97D1866D /* SoccerFieldView.swift */; };
+		DBD91C198EAC292F9829C632 /* TeamCountPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80D25D009EEB2088AED15F84 /* TeamCountPill.swift */; };
+		EDD3CD3AE0DCF507DAD551C6 /* LayoutMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FE4FD57872A05CA0E104F81 /* LayoutMath.swift */; };
+		FFCB7C515832B8EF85A0A72B /* TacticsBoardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 881F1BDAE5CA27F0536C2078 /* TacticsBoardViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		008492105DA592F68885E06C /* SoccerPitchGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoccerPitchGeometry.swift; sourceTree = "<group>"; };
+		1FE4FD57872A05CA0E104F81 /* LayoutMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutMath.swift; sourceTree = "<group>"; };
 		22B1E8A804B4A3B3FC561A9B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		3879C3D384FD87E5B47F1ABF /* ios-pencilkit-20260308-160158-2oxrqp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "ios-pencilkit-20260308-160158-2oxrqp.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		29EA06729DF9FEBDE0138DC6 /* DrawSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawSettingsSheet.swift; sourceTree = "<group>"; };
+		31990074DF753B7E97D1866D /* SoccerFieldView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoccerFieldView.swift; sourceTree = "<group>"; };
+		3879C3D384FD87E5B47F1ABF /* ios-pencilkit-20260308-160158-2oxrqp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ios-pencilkit-20260308-160158-2oxrqp.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AB3FA806157216CD6A8FA0D /* PencilCanvasRepresentable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilCanvasRepresentable.swift; sourceTree = "<group>"; };
+		682E58930512C64D8B836A9D /* PlayerMarkerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerMarkerView.swift; sourceTree = "<group>"; };
+		80D25D009EEB2088AED15F84 /* TeamCountPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamCountPill.swift; sourceTree = "<group>"; };
 		82CC1EE1E5520D8189DF4295 /* ios-pencilkit-20260308-160158-2oxrqpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ios-pencilkit-20260308-160158-2oxrqpApp.swift"; sourceTree = "<group>"; };
+		881F1BDAE5CA27F0536C2078 /* TacticsBoardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TacticsBoardViewModel.swift; sourceTree = "<group>"; };
 		8A65DE4B5332700B798B5F09 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		96CA919B42AF73118E04C281 /* PlayerSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSettingsSheet.swift; sourceTree = "<group>"; };
+		9A620FCB0B51C782B28E7A03 /* IconControlButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconControlButton.swift; sourceTree = "<group>"; };
+		A4E1349377E1BC84E044CDAC /* LineupFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupFactory.swift; sourceTree = "<group>"; };
+		A6D03BD6E24A77611208A0D6 /* TacticsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TacticsModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		3F25FC3BB28D70DAB167B913 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				881F1BDAE5CA27F0536C2078 /* TacticsBoardViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		808D02C2EBDBF90C59F80F1F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A6D03BD6E24A77611208A0D6 /* TacticsModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		8300B4D26A749CE658403D4A = {
 			isa = PBXGroup;
 			children = (
 				D985787862DC793D8F45B094 /* Sources */,
 				B607FFEDC0CA9187AA5B9BD0 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		861E94F00019B50E0B53C692 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				9A620FCB0B51C782B28E7A03 /* IconControlButton.swift */,
+				5AB3FA806157216CD6A8FA0D /* PencilCanvasRepresentable.swift */,
+				682E58930512C64D8B836A9D /* PlayerMarkerView.swift */,
+				31990074DF753B7E97D1866D /* SoccerFieldView.swift */,
+				80D25D009EEB2088AED15F84 /* TeamCountPill.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		94C2BF2D792291EDB856C091 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				861E94F00019B50E0B53C692 /* Components */,
+				BFC09AA271511BA38D592EF2 /* Sheets */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		B607FFEDC0CA9187AA5B9BD0 /* Products */ = {
@@ -35,14 +96,37 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		BFC09AA271511BA38D592EF2 /* Sheets */ = {
+			isa = PBXGroup;
+			children = (
+				29EA06729DF9FEBDE0138DC6 /* DrawSettingsSheet.swift */,
+				96CA919B42AF73118E04C281 /* PlayerSettingsSheet.swift */,
+			);
+			path = Sheets;
+			sourceTree = "<group>";
+		};
 		D985787862DC793D8F45B094 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
 				8A65DE4B5332700B798B5F09 /* ContentView.swift */,
 				22B1E8A804B4A3B3FC561A9B /* Info.plist */,
 				82CC1EE1E5520D8189DF4295 /* ios-pencilkit-20260308-160158-2oxrqpApp.swift */,
+				E0123259CCDBA1F8D453A404 /* Core */,
+				808D02C2EBDBF90C59F80F1F /* Models */,
+				3F25FC3BB28D70DAB167B913 /* ViewModels */,
+				94C2BF2D792291EDB856C091 /* Views */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		E0123259CCDBA1F8D453A404 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				1FE4FD57872A05CA0E104F81 /* LayoutMath.swift */,
+				A4E1349377E1BC84E044CDAC /* LineupFactory.swift */,
+				008492105DA592F68885E06C /* SoccerPitchGeometry.swift */,
+			);
+			path = Core;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -84,7 +168,6 @@
 			);
 			mainGroup = 8300B4D26A749CE658403D4A;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -99,6 +182,18 @@
 			buildActionMask = 2147483647;
 			files = (
 				7ABB1F012C632222C9860A75 /* ContentView.swift in Sources */,
+				203FD4FBAEEE88F351181412 /* DrawSettingsSheet.swift in Sources */,
+				D5ABE7C23E2B79B3ACC2A19E /* IconControlButton.swift in Sources */,
+				EDD3CD3AE0DCF507DAD551C6 /* LayoutMath.swift in Sources */,
+				10B210427733E925F3B6581D /* LineupFactory.swift in Sources */,
+				7DFB4ACDE986BCB49DAA5A53 /* PencilCanvasRepresentable.swift in Sources */,
+				12DAEE057F7F45E9F3D098F6 /* PlayerMarkerView.swift in Sources */,
+				ADAAF476A957180B73083AE1 /* PlayerSettingsSheet.swift in Sources */,
+				D9E1CF252AB459FB4864D916 /* SoccerFieldView.swift in Sources */,
+				119693D8B8BC61C39BBD6864 /* SoccerPitchGeometry.swift in Sources */,
+				FFCB7C515832B8EF85A0A72B /* TacticsBoardViewModel.swift in Sources */,
+				0DE77D37661DE9DBFA489779 /* TacticsModels.swift in Sources */,
+				DBD91C198EAC292F9829C632 /* TeamCountPill.swift in Sources */,
 				CDE005A3E55011CC4294215D /* ios-pencilkit-20260308-160158-2oxrqpApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -111,6 +206,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = N3X2H33TR7;
 				INFOPLIST_FILE = Sources/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -132,6 +228,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = N3X2H33TR7;
 				INFOPLIST_FILE = Sources/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

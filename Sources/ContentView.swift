@@ -1,39 +1,7 @@
 import SwiftUI
-import PencilKit
-import UIKit
 
 struct ContentView: View {
-    @State private var canvasView = PKCanvasView()
-
-    @State private var interactionMode: InteractionMode = .draw
-
-    @State private var drawingMode: DrawingMode = .ink
-    @State private var inkStyle: InkStyle = .pen
-    @State private var inkColor: Color = .yellow
-    @State private var strokeWidth: CGFloat = 5
-    @State private var strokeOpacity: Double = 0.9
-    @State private var homeTeamColor: Color = Color(red: 0.82, green: 0.13, blue: 0.16)
-    @State private var awayTeamColor: Color = Color(red: 0.10, green: 0.40, blue: 0.90)
-
-    @State private var homeTeamSize: Int = 11
-    @State private var awayTeamSize: Int = 11
-    @State private var homeFormation: Formation = .fourThreeThree
-    @State private var awayFormation: Formation = .fourThreeThree
-    @State private var players: [PlayerToken] = LineupFactory.makePlayers(
-        homeSize: 11,
-        awaySize: 11,
-        homeFormation: .fourThreeThree,
-        awayFormation: .fourThreeThree
-    )
-
-    @State private var selectedPlayerID: UUID?
-    @State private var notes: String = "Kickoff lineup loaded. Draw pressing lines, passing lanes, and defensive shape."
-    @State private var isDrawSettingsPresented = false
-    @State private var isPlayerSettingsPresented = false
-    @State private var isNameEditorPresented = false
-    @State private var namingPlayerID: UUID?
-    @State private var playerNameDraft: String = ""
-    @State private var didInitializeScreen = false
+    @StateObject private var viewModel = TacticsBoardViewModel()
 
     var body: some View {
         NavigationStack {
@@ -44,36 +12,33 @@ struct ContentView: View {
                     topPanel
 
                     GeometryReader { geometry in
-                        let fieldSize = measuredFieldSize(in: geometry.size)
+                        let fieldSize = FieldLayout.measuredFieldSize(in: geometry.size)
 
                         ZStack {
                             SoccerFieldView()
 
                             PencilCanvasRepresentable(
-                                canvasView: $canvasView,
-                                tool: activeTool,
-                                isDrawingEnabled: interactionMode == .draw
+                                canvasView: viewModel.canvasView,
+                                tool: viewModel.activeTool,
+                                isDrawingEnabled: viewModel.interactionMode == .draw
                             )
 
-                            ForEach($players) { $player in
+                            ForEach($viewModel.players) { $player in
                                 PlayerMarkerView(
                                     player: $player,
-                                    isSelected: selectedPlayerID == player.id,
+                                    isSelected: viewModel.selectedPlayerID == player.id,
                                     fieldSize: fieldSize,
-                                    isEditable: interactionMode == .players,
-                                    homeColor: homeTeamColor,
-                                    awayColor: awayTeamColor,
+                                    isEditable: viewModel.interactionMode == .players,
+                                    homeColor: viewModel.homeTeamColor,
+                                    awayColor: viewModel.awayTeamColor,
                                     onLongPress: {
-                                        guard interactionMode == .players else { return }
-                                        selectedPlayerID = player.id
-                                        namingPlayerID = player.id
-                                        playerNameDraft = player.name ?? ""
-                                        isNameEditorPresented = true
+                                        guard viewModel.interactionMode == .players else { return }
+                                        viewModel.beginNamingPlayer(id: player.id, currentName: player.name)
                                     }
                                 )
                                 .onTapGesture {
-                                    guard interactionMode == .players else { return }
-                                    selectedPlayerID = player.id
+                                    guard viewModel.interactionMode == .players else { return }
+                                    viewModel.selectPlayer(player.id)
                                 }
                             }
                         }
@@ -90,74 +55,49 @@ struct ContentView: View {
                 .padding(.bottom, 12)
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $isDrawSettingsPresented) {
+            .sheet(isPresented: $viewModel.isDrawSettingsPresented) {
                 DrawSettingsSheet(
-                    drawingMode: $drawingMode,
-                    inkStyle: $inkStyle,
-                    inkColor: $inkColor,
-                    strokeWidth: $strokeWidth,
-                    strokeOpacity: $strokeOpacity,
-                    clearDrawings: { canvasView.drawing = PKDrawing() },
-                    undoDrawing: { canvasView.undoManager?.undo() },
-                    redoDrawing: { canvasView.undoManager?.redo() }
+                    drawingMode: $viewModel.drawingMode,
+                    inkStyle: $viewModel.inkStyle,
+                    inkColor: $viewModel.inkColor,
+                    strokeWidth: $viewModel.strokeWidth,
+                    strokeOpacity: $viewModel.strokeOpacity,
+                    clearDrawings: viewModel.clearDrawing,
+                    undoDrawing: viewModel.undoDrawing,
+                    redoDrawing: viewModel.redoDrawing
                 )
             }
-            .sheet(isPresented: $isPlayerSettingsPresented) {
+            .sheet(isPresented: $viewModel.isPlayerSettingsPresented) {
                 PlayerSettingsSheet(
-                    homeTeamSize: $homeTeamSize,
-                    awayTeamSize: $awayTeamSize,
-                    homeFormation: $homeFormation,
-                    awayFormation: $awayFormation,
-                    homeTeamColor: $homeTeamColor,
-                    awayTeamColor: $awayTeamColor,
-                    notes: $notes,
-                    applyKickoffLineup: applyKickoffLineup,
-                    flipTeamSides: flipTeamSides,
-                    renumberTeams: renumberTeams
+                    homeTeamSize: $viewModel.homeTeamSize,
+                    awayTeamSize: $viewModel.awayTeamSize,
+                    homeFormation: $viewModel.homeFormation,
+                    awayFormation: $viewModel.awayFormation,
+                    homeTeamColor: $viewModel.homeTeamColor,
+                    awayTeamColor: $viewModel.awayTeamColor,
+                    notes: $viewModel.notes,
+                    applyKickoffLineup: viewModel.applyKickoffLineup,
+                    flipTeamSides: viewModel.flipTeamSides,
+                    renumberTeams: viewModel.renumberTeams
                 )
             }
-            .alert("Player Name", isPresented: $isNameEditorPresented) {
-                TextField("Name", text: $playerNameDraft)
+            .alert("Player Name", isPresented: $viewModel.isNameEditorPresented) {
+                TextField("Name", text: $viewModel.playerNameDraft)
                 Button("Save") {
-                    savePlayerName()
+                    viewModel.savePlayerName()
                 }
                 Button("Clear", role: .destructive) {
-                    clearPlayerName()
+                    viewModel.clearPlayerName()
                 }
                 Button("Cancel", role: .cancel) {
-                    namingPlayerID = nil
+                    viewModel.cancelNameEditing()
                 }
             } message: {
                 Text("Long press a player to show a name below the marker.")
             }
-            .onChange(of: interactionMode) { _, mode in
-                if mode == .draw {
-                    selectedPlayerID = nil
-                    isNameEditorPresented = false
-                    namingPlayerID = nil
-                }
-            }
             .onAppear {
-                guard !didInitializeScreen else { return }
-                didInitializeScreen = true
-                canvasView.drawing = PKDrawing()
-                applyKickoffLineup()
+                viewModel.initializeIfNeeded()
             }
-        }
-    }
-
-    private var activeTool: PKTool {
-        switch drawingMode {
-        case .ink:
-            return PKInkingTool(
-                inkStyle.pkInkType,
-                color: UIColor(inkColor).withAlphaComponent(strokeOpacity),
-                width: strokeWidth
-            )
-        case .eraser:
-            return PKEraserTool(.vector)
-        case .lasso:
-            return PKLassoTool()
         }
     }
 
@@ -165,16 +105,16 @@ struct ContentView: View {
         HStack(spacing: 10) {
             TeamCountPill(
                 title: "Home",
-                count: players.filter { $0.team == .home }.count,
-                color: homeTeamColor
+                count: viewModel.homePlayerCount,
+                color: viewModel.homeTeamColor
             )
 
             Spacer()
 
             TeamCountPill(
                 title: "Away",
-                count: players.filter { $0.team == .away }.count,
-                color: awayTeamColor
+                count: viewModel.awayPlayerCount,
+                color: viewModel.awayTeamColor
             )
         }
         .padding(10)
@@ -189,21 +129,21 @@ struct ContentView: View {
                         systemName: mode.systemImage,
                         accessibilityLabel: mode.title,
                         tint: .green,
-                        isActive: interactionMode == mode
+                        isActive: viewModel.interactionMode == mode
                     ) {
-                        interactionMode = mode
+                        viewModel.interactionMode = mode
                     }
                 }
                 Spacer(minLength: 0)
             }
 
-            if interactionMode == .draw {
+            if viewModel.interactionMode == .draw {
                 drawControlBar
             } else {
                 playerControlBar
             }
 
-            if interactionMode == .players, let selectedIndex {
+            if viewModel.interactionMode == .players, let selectedIndex = viewModel.selectedIndex {
                 selectedPlayerBar(index: selectedIndex)
             }
         }
@@ -222,9 +162,9 @@ struct ContentView: View {
                     systemName: mode.systemImage,
                     accessibilityLabel: mode.title,
                     tint: .yellow,
-                    isActive: drawingMode == mode
+                    isActive: viewModel.drawingMode == mode
                 ) {
-                    drawingMode = mode
+                    viewModel.drawingMode = mode
                 }
             }
 
@@ -235,21 +175,21 @@ struct ContentView: View {
                 accessibilityLabel: "Draw Settings",
                 tint: .green
             ) {
-                isDrawSettingsPresented = true
+                viewModel.isDrawSettingsPresented = true
             }
 
             IconControlButton(
                 systemName: "arrow.uturn.backward",
                 accessibilityLabel: "Undo"
             ) {
-                canvasView.undoManager?.undo()
+                viewModel.undoDrawing()
             }
 
             IconControlButton(
                 systemName: "arrow.uturn.forward",
                 accessibilityLabel: "Redo"
             ) {
-                canvasView.undoManager?.redo()
+                viewModel.redoDrawing()
             }
 
             IconControlButton(
@@ -258,7 +198,7 @@ struct ContentView: View {
                 tint: .red,
                 role: .destructive
             ) {
-                canvasView.drawing = PKDrawing()
+                viewModel.clearDrawing()
             }
         }
     }
@@ -270,28 +210,28 @@ struct ContentView: View {
                 accessibilityLabel: "Player Settings",
                 tint: .green
             ) {
-                isPlayerSettingsPresented = true
+                viewModel.isPlayerSettingsPresented = true
             }
 
             IconControlButton(
                 systemName: "soccerball",
                 accessibilityLabel: "Apply Kickoff"
             ) {
-                applyKickoffLineup()
+                viewModel.applyKickoffLineup()
             }
 
             IconControlButton(
                 systemName: "arrow.triangle.2.circlepath",
                 accessibilityLabel: "Flip Team Sides"
             ) {
-                flipTeamSides()
+                viewModel.flipTeamSides()
             }
 
             IconControlButton(
                 systemName: "number.circle",
                 accessibilityLabel: "Renumber Teams"
             ) {
-                renumberTeams()
+                viewModel.renumberTeams()
             }
 
             Spacer(minLength: 0)
@@ -304,10 +244,10 @@ struct ContentView: View {
                 systemName: "minus.circle",
                 accessibilityLabel: "Decrease Number"
             ) {
-                players[index].number = max(1, players[index].number - 1)
+                viewModel.decreasePlayerNumber(at: index)
             }
 
-            Text("\(players[index].number)")
+            Text("\(viewModel.players[index].number)")
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
@@ -317,7 +257,7 @@ struct ContentView: View {
                 systemName: "plus.circle",
                 accessibilityLabel: "Increase Number"
             ) {
-                players[index].number = min(99, players[index].number + 1)
+                viewModel.increasePlayerNumber(at: index)
             }
 
             Spacer(minLength: 0)
@@ -325,881 +265,20 @@ struct ContentView: View {
             IconControlButton(
                 systemName: "house.fill",
                 accessibilityLabel: "Set Home Team",
-                tint: homeTeamColor,
-                isActive: players[index].team == .home
+                tint: viewModel.homeTeamColor,
+                isActive: viewModel.players[index].team == .home
             ) {
-                players[index].team = .home
+                viewModel.setPlayerTeam(at: index, team: .home)
             }
 
             IconControlButton(
                 systemName: "flag.fill",
                 accessibilityLabel: "Set Away Team",
-                tint: awayTeamColor,
-                isActive: players[index].team == .away
+                tint: viewModel.awayTeamColor,
+                isActive: viewModel.players[index].team == .away
             ) {
-                players[index].team = .away
+                viewModel.setPlayerTeam(at: index, team: .away)
             }
         }
     }
-
-    private var selectedIndex: Int? {
-        guard let selectedPlayerID else { return nil }
-        return players.firstIndex { $0.id == selectedPlayerID }
-    }
-
-    private func measuredFieldSize(in container: CGSize) -> CGSize {
-        let horizontalPadding: CGFloat = 16
-        let verticalPadding: CGFloat = 24
-        let maxWidth = max(120, container.width - (horizontalPadding * 2))
-        let maxHeight = max(240, container.height - (verticalPadding * 2))
-
-        let widthToLengthRatio = SoccerPitchMetrics.width / SoccerPitchMetrics.length
-        let width = min(maxWidth, maxHeight * widthToLengthRatio)
-        let height = width / widthToLengthRatio
-
-        return CGSize(width: width, height: height)
-    }
-
-    private func applyKickoffLineup() {
-        let existingNames = players.reduce(into: [String: String]()) { nameMap, player in
-            guard let trimmedName = player.name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmedName.isEmpty else {
-                return
-            }
-            let key = playerNameKey(team: player.team, number: player.number)
-            if nameMap[key] == nil {
-                nameMap[key] = trimmedName
-            }
-        }
-
-        var updatedPlayers = LineupFactory.makePlayers(
-            homeSize: homeTeamSize,
-            awaySize: awayTeamSize,
-            homeFormation: homeFormation,
-            awayFormation: awayFormation
-        )
-
-        for index in updatedPlayers.indices {
-            let key = playerNameKey(team: updatedPlayers[index].team, number: updatedPlayers[index].number)
-            updatedPlayers[index].name = existingNames[key]
-        }
-
-        players = updatedPlayers
-        selectedPlayerID = nil
-        namingPlayerID = nil
-        playerNameDraft = ""
-        isNameEditorPresented = false
-    }
-
-    private func flipTeamSides() {
-        for index in players.indices {
-            players[index].y = 1 - players[index].y
-        }
-    }
-
-    private func renumberTeams() {
-        var homeNumber = 1
-        var awayNumber = 1
-
-        for index in players.indices {
-            if players[index].team == .home {
-                players[index].number = homeNumber
-                homeNumber += 1
-            } else {
-                players[index].number = awayNumber
-                awayNumber += 1
-            }
-        }
-    }
-
-    private func savePlayerName() {
-        guard let index = namingPlayerIndex else { return }
-        let trimmed = playerNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        players[index].name = trimmed.isEmpty ? nil : trimmed
-        namingPlayerID = nil
-    }
-
-    private func clearPlayerName() {
-        guard let index = namingPlayerIndex else { return }
-        players[index].name = nil
-        playerNameDraft = ""
-        namingPlayerID = nil
-    }
-
-    private var namingPlayerIndex: Int? {
-        guard let namingPlayerID else { return nil }
-        return players.firstIndex { $0.id == namingPlayerID }
-    }
-
-    private func playerNameKey(team: TeamSide, number: Int) -> String {
-        "\(team == .home ? "H" : "A")-\(number)"
-    }
-}
-
-enum InteractionMode: CaseIterable {
-    case draw
-    case players
-
-    var title: String {
-        switch self {
-        case .draw: return "Draw"
-        case .players: return "Players"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .draw: return "pencil.tip"
-        case .players: return "person.2.fill"
-        }
-    }
-}
-
-enum DrawingMode: CaseIterable {
-    case ink
-    case eraser
-    case lasso
-
-    var title: String {
-        switch self {
-        case .ink: return "Ink"
-        case .eraser: return "Eraser"
-        case .lasso: return "Lasso"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .ink: return "pencil.line"
-        case .eraser: return "eraser"
-        case .lasso: return "lasso"
-        }
-    }
-}
-
-enum InkStyle: CaseIterable {
-    case pen
-    case marker
-    case pencil
-    case monoline
-
-    var title: String {
-        switch self {
-        case .pen: return "Pen"
-        case .marker: return "Marker"
-        case .pencil: return "Pencil"
-        case .monoline: return "Mono"
-        }
-    }
-
-    var pkInkType: PKInkingTool.InkType {
-        switch self {
-        case .pen: return .pen
-        case .marker: return .marker
-        case .pencil: return .pencil
-        case .monoline: return .monoline
-        }
-    }
-}
-
-enum TeamSide: CaseIterable {
-    case home
-    case away
-
-    var title: String {
-        switch self {
-        case .home: return "Home"
-        case .away: return "Away"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .home: return Color(red: 0.82, green: 0.13, blue: 0.16)
-        case .away: return Color(red: 0.10, green: 0.40, blue: 0.90)
-        }
-    }
-}
-
-enum Formation: String, CaseIterable, Identifiable {
-    case fourThreeThree = "4-3-3"
-    case fourFourTwo = "4-4-2"
-    case fourTwoThreeOne = "4-2-3-1"
-
-    var id: String { rawValue }
-}
-
-struct PlayerToken: Identifiable {
-    let id: UUID
-    var team: TeamSide
-    var number: Int
-    var x: CGFloat
-    var y: CGFloat
-    var name: String?
-
-    init(id: UUID = UUID(), team: TeamSide, number: Int, x: CGFloat, y: CGFloat, name: String? = nil) {
-        self.id = id
-        self.team = team
-        self.number = number
-        self.x = x
-        self.y = y
-        self.name = name
-    }
-}
-
-struct TeamCountPill: View {
-    let title: String
-    let count: Int
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 9, height: 9)
-            Text("\(title): \(count)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.black.opacity(0.45), in: Capsule())
-    }
-}
-
-struct IconControlButton: View {
-    let systemName: String
-    let accessibilityLabel: String
-    var tint: Color = .white
-    var isActive: Bool = false
-    var role: ButtonRole? = nil
-    let action: () -> Void
-
-    var body: some View {
-        Group {
-            if let role {
-                Button(role: role, action: action) {
-                    buttonBody
-                }
-            } else {
-                Button(action: action) {
-                    buttonBody
-                }
-            }
-        }
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var buttonBody: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 17, weight: .semibold))
-            .symbolRenderingMode(.hierarchical)
-            .frame(width: 42, height: 42)
-            .foregroundStyle(isActive ? Color.black.opacity(0.85) : tint.opacity(0.95))
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isActive ? tint : Color.white.opacity(0.13))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(.white.opacity(0.2), lineWidth: 1)
-            )
-    }
-}
-
-struct PlayerMarkerView: View {
-    @Binding var player: PlayerToken
-    let isSelected: Bool
-    let fieldSize: CGSize
-    let isEditable: Bool
-    let homeColor: Color
-    let awayColor: Color
-    let onLongPress: () -> Void
-
-    private let markerSize: CGFloat = 36
-
-    var body: some View {
-        markerBody
-            .frame(width: markerSize, height: markerSize)
-            .overlay(alignment: .bottom) {
-                if let playerName = displayName {
-                    Text(playerName)
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .allowsTightening(true)
-                        .minimumScaleFactor(0.6)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(.black.opacity(0.6), in: Capsule())
-                        .offset(y: 20)
-                }
-            }
-            .position(x: player.x * fieldSize.width, y: player.y * fieldSize.height)
-            .gesture(dragGesture)
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.45)
-                    .onEnded { _ in
-                        guard isEditable else { return }
-                        onLongPress()
-                    }
-            )
-            .allowsHitTesting(isEditable)
-            .shadow(color: .black.opacity(0.28), radius: 2, x: 0, y: 1)
-    }
-
-    private var markerBody: some View {
-        ZStack {
-            Circle()
-                .fill(player.team == .home ? homeColor : awayColor)
-                .overlay(
-                    Circle()
-                        .stroke(.white, lineWidth: isSelected ? 3 : 1.6)
-                )
-
-            Text("\(player.number)")
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-        }
-    }
-
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                guard isEditable else { return }
-                player.x = clamp(value.location.x / max(fieldSize.width, 1), min: 0.04, max: 0.96)
-                player.y = clamp(value.location.y / max(fieldSize.height, 1), min: 0.04, max: 0.96)
-            }
-    }
-
-    private var displayName: String? {
-        guard let playerName = player.name?.trimmingCharacters(in: .whitespacesAndNewlines), !playerName.isEmpty else {
-            return nil
-        }
-        return playerName
-    }
-}
-
-struct SoccerFieldView: View {
-    var body: some View {
-        // Draw the pitch in one pass so there are no view seams that can look like fake center lines.
-        Canvas { context, size in
-            let canvasRect = CGRect(origin: .zero, size: size)
-            let roundedPath = RoundedRectangle(cornerRadius: 18).path(in: canvasRect)
-            context.fill(
-                roundedPath,
-                with: .linearGradient(
-                    Gradient(colors: [Color(red: 0.10, green: 0.47, blue: 0.20), Color(red: 0.06, green: 0.34, blue: 0.15)]),
-                    startPoint: CGPoint(x: canvasRect.midX, y: canvasRect.minY),
-                    endPoint: CGPoint(x: canvasRect.midX, y: canvasRect.maxY)
-                )
-            )
-
-            let stripeCount = 12
-            let stripeHeight = size.height / CGFloat(stripeCount)
-            for stripe in 0..<stripeCount where stripe.isMultiple(of: 2) {
-                let stripeRect = CGRect(
-                    x: 0,
-                    y: CGFloat(stripe) * stripeHeight,
-                    width: size.width,
-                    height: stripeHeight
-                )
-                context.fill(Path(stripeRect), with: .color(.white.opacity(0.05)))
-            }
-
-            let fieldRect = canvasRect.insetBy(dx: 8, dy: 8)
-            let strokeStyle = StrokeStyle(lineWidth: 2)
-            let white = GraphicsContext.Shading.color(.white.opacity(0.95))
-
-            context.stroke(Path(fieldRect), with: white, style: strokeStyle)
-            context.stroke(SoccerPitchPathBuilder.halfwayLine(in: fieldRect), with: white, style: strokeStyle)
-            context.stroke(SoccerPitchPathBuilder.centerCircle(in: fieldRect), with: white, style: strokeStyle)
-            context.stroke(SoccerPitchPathBuilder.topPenaltyArea(in: fieldRect), with: white, style: strokeStyle)
-            context.stroke(SoccerPitchPathBuilder.bottomPenaltyArea(in: fieldRect), with: white, style: strokeStyle)
-            context.stroke(SoccerPitchPathBuilder.topGoalArea(in: fieldRect), with: white, style: strokeStyle)
-            context.stroke(SoccerPitchPathBuilder.bottomGoalArea(in: fieldRect), with: white, style: strokeStyle)
-            context.stroke(SoccerPitchPathBuilder.topPenaltyArc(in: fieldRect), with: white, style: strokeStyle)
-            context.stroke(SoccerPitchPathBuilder.bottomPenaltyArc(in: fieldRect), with: white, style: strokeStyle)
-            context.fill(SoccerPitchPathBuilder.spots(in: fieldRect), with: .color(.white))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-    }
-}
-
-enum SoccerPitchMetrics {
-    static let length: CGFloat = 105
-    static let width: CGFloat = 68
-    static let penaltyAreaDepth: CGFloat = 16.5
-    static let penaltyAreaWidth: CGFloat = 40.32
-    static let goalAreaDepth: CGFloat = 5.5
-    static let goalAreaWidth: CGFloat = 18.32
-    static let centerCircleRadius: CGFloat = 9.15
-    static let penaltyMarkDistance: CGFloat = 11
-}
-
-enum SoccerPitchPathBuilder {
-    static func halfwayLine(in rect: CGRect) -> Path {
-        var path = Path()
-        let halfwayY = y(52.5, in: rect)
-        path.move(to: CGPoint(x: rect.minX, y: halfwayY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: halfwayY))
-        return path
-    }
-
-    static func centerCircle(in rect: CGRect) -> Path {
-        var path = Path()
-        let centerRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: rect)
-        let center = CGPoint(x: x(34, in: rect), y: y(52.5, in: rect))
-        path.addEllipse(in: CGRect(
-            x: center.x - centerRadius,
-            y: center.y - centerRadius,
-            width: centerRadius * 2,
-            height: centerRadius * 2
-        ))
-        return path
-    }
-
-    static func topPenaltyArea(in rect: CGRect) -> Path {
-        var path = Path()
-        let penaltyLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.penaltyAreaWidth) / 2
-        path.addRect(CGRect(
-            x: x(penaltyLeftX, in: rect),
-            y: y(0, in: rect),
-            width: scaleX(SoccerPitchMetrics.penaltyAreaWidth, in: rect),
-            height: scaleY(SoccerPitchMetrics.penaltyAreaDepth, in: rect)
-        ))
-        return path
-    }
-
-    static func bottomPenaltyArea(in rect: CGRect) -> Path {
-        var path = Path()
-        let penaltyLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.penaltyAreaWidth) / 2
-        path.addRect(CGRect(
-            x: x(penaltyLeftX, in: rect),
-            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyAreaDepth, in: rect),
-            width: scaleX(SoccerPitchMetrics.penaltyAreaWidth, in: rect),
-            height: scaleY(SoccerPitchMetrics.penaltyAreaDepth, in: rect)
-        ))
-        return path
-    }
-
-    static func topGoalArea(in rect: CGRect) -> Path {
-        var path = Path()
-        let goalLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.goalAreaWidth) / 2
-        path.addRect(CGRect(
-            x: x(goalLeftX, in: rect),
-            y: y(0, in: rect),
-            width: scaleX(SoccerPitchMetrics.goalAreaWidth, in: rect),
-            height: scaleY(SoccerPitchMetrics.goalAreaDepth, in: rect)
-        ))
-        return path
-    }
-
-    static func bottomGoalArea(in rect: CGRect) -> Path {
-        var path = Path()
-        let goalLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.goalAreaWidth) / 2
-        path.addRect(CGRect(
-            x: x(goalLeftX, in: rect),
-            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.goalAreaDepth, in: rect),
-            width: scaleX(SoccerPitchMetrics.goalAreaWidth, in: rect),
-            height: scaleY(SoccerPitchMetrics.goalAreaDepth, in: rect)
-        ))
-        return path
-    }
-
-    static func topPenaltyArc(in rect: CGRect) -> Path {
-        var path = Path()
-        let topPenaltyCenter = CGPoint(
-            x: x(SoccerPitchMetrics.width / 2, in: rect),
-            y: y(SoccerPitchMetrics.penaltyMarkDistance, in: rect)
-        )
-
-        let arcRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: rect)
-        let deltaY = SoccerPitchMetrics.penaltyAreaDepth - SoccerPitchMetrics.penaltyMarkDistance
-        let angle = Angle(radians: Double(asin(deltaY / SoccerPitchMetrics.centerCircleRadius)))
-
-        path.addArc(
-            center: topPenaltyCenter,
-            radius: arcRadius,
-            startAngle: angle,
-            endAngle: .degrees(180) - angle,
-            clockwise: false
-        )
-        return path
-    }
-
-    static func bottomPenaltyArc(in rect: CGRect) -> Path {
-        var path = Path()
-        let bottomPenaltyCenter = CGPoint(
-            x: x(SoccerPitchMetrics.width / 2, in: rect),
-            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyMarkDistance, in: rect)
-        )
-        let arcRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: rect)
-        let deltaY = SoccerPitchMetrics.penaltyAreaDepth - SoccerPitchMetrics.penaltyMarkDistance
-        let angle = Angle(radians: Double(asin(deltaY / SoccerPitchMetrics.centerCircleRadius)))
-        path.addArc(
-            center: bottomPenaltyCenter,
-            radius: arcRadius,
-            startAngle: .degrees(180) + angle,
-            endAngle: .degrees(360) - angle,
-            clockwise: false
-        )
-        return path
-    }
-
-    static func spots(in rect: CGRect) -> Path {
-        var path = Path()
-
-        addSpot(to: &path, xMeters: SoccerPitchMetrics.width / 2, yMeters: SoccerPitchMetrics.length / 2, in: rect)
-        addSpot(to: &path, xMeters: SoccerPitchMetrics.width / 2, yMeters: SoccerPitchMetrics.penaltyMarkDistance, in: rect)
-        addSpot(to: &path, xMeters: SoccerPitchMetrics.width / 2, yMeters: SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyMarkDistance, in: rect)
-
-        return path
-    }
-
-    private static func addSpot(to path: inout Path, xMeters: CGFloat, yMeters: CGFloat, in rect: CGRect) {
-        let x = rect.minX + (xMeters / SoccerPitchMetrics.width) * rect.width
-        let y = rect.minY + (yMeters / SoccerPitchMetrics.length) * rect.height
-        path.addEllipse(in: CGRect(x: x - 2.5, y: y - 2.5, width: 5, height: 5))
-    }
-
-    private static func x(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
-        rect.minX + (meters / SoccerPitchMetrics.width) * rect.width
-    }
-
-    private static func y(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
-        rect.minY + (meters / SoccerPitchMetrics.length) * rect.height
-    }
-
-    private static func scaleX(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
-        (meters / SoccerPitchMetrics.width) * rect.width
-    }
-
-    private static func scaleY(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
-        (meters / SoccerPitchMetrics.length) * rect.height
-    }
-}
-
-struct PencilCanvasRepresentable: UIViewRepresentable {
-    @Binding var canvasView: PKCanvasView
-    let tool: PKTool
-    let isDrawingEnabled: Bool
-
-    func makeUIView(context: Context) -> PKCanvasView {
-        canvasView.backgroundColor = .clear
-        canvasView.isOpaque = false
-        canvasView.drawingPolicy = .anyInput
-        canvasView.isScrollEnabled = false
-        canvasView.bounces = false
-        canvasView.maximumZoomScale = 1
-        canvasView.minimumZoomScale = 1
-        canvasView.tool = tool
-        canvasView.isUserInteractionEnabled = isDrawingEnabled
-        return canvasView
-    }
-
-    func updateUIView(_ uiView: PKCanvasView, context: Context) {
-        uiView.tool = tool
-        uiView.isUserInteractionEnabled = isDrawingEnabled
-    }
-}
-
-struct DrawSettingsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    @Binding var drawingMode: DrawingMode
-    @Binding var inkStyle: InkStyle
-    @Binding var inkColor: Color
-    @Binding var strokeWidth: CGFloat
-    @Binding var strokeOpacity: Double
-
-    let clearDrawings: () -> Void
-    let undoDrawing: () -> Void
-    let redoDrawing: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Drawing Tools") {
-                    Picker("Mode", selection: $drawingMode) {
-                        ForEach(DrawingMode.allCases, id: \.self) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    if drawingMode == .ink {
-                        Picker("Ink Style", selection: $inkStyle) {
-                            ForEach(InkStyle.allCases, id: \.self) { style in
-                                Text(style.title).tag(style)
-                            }
-                        }
-
-                        ColorPicker("Ink Color", selection: $inkColor)
-
-                        VStack(alignment: .leading) {
-                            Text("Stroke Width: \(Int(strokeWidth))")
-                            Slider(value: $strokeWidth, in: 1...24, step: 1)
-                        }
-
-                        VStack(alignment: .leading) {
-                            Text("Opacity: \(Int(strokeOpacity * 100))%")
-                            Slider(value: $strokeOpacity, in: 0.2...1, step: 0.05)
-                        }
-                    }
-                }
-
-                Section("Canvas Actions") {
-                    Button("Undo Drawing") { undoDrawing() }
-                    Button("Redo Drawing") { redoDrawing() }
-                    Button("Clear Drawings", role: .destructive) { clearDrawings() }
-                }
-            }
-            .navigationTitle("Draw Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
-struct PlayerSettingsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    @Binding var homeTeamSize: Int
-    @Binding var awayTeamSize: Int
-    @Binding var homeFormation: Formation
-    @Binding var awayFormation: Formation
-    @Binding var homeTeamColor: Color
-    @Binding var awayTeamColor: Color
-    @Binding var notes: String
-
-    let applyKickoffLineup: () -> Void
-    let flipTeamSides: () -> Void
-    let renumberTeams: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Match Setup") {
-                    Stepper("Home Players: \(homeTeamSize)", value: $homeTeamSize, in: 5...11)
-                    Stepper("Away Players: \(awayTeamSize)", value: $awayTeamSize, in: 5...11)
-
-                    Text("Current setup: \(homeTeamSize)v\(awayTeamSize)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach([11, 9, 8, 7, 5], id: \.self) { size in
-                                Button("\(size)v\(size)") {
-                                    homeTeamSize = size
-                                    awayTeamSize = size
-                                    applyKickoffLineup()
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-
-                    Button("Apply Kickoff Lineup") {
-                        applyKickoffLineup()
-                    }
-                }
-
-                if homeTeamSize == 11 || awayTeamSize == 11 {
-                    Section("11v11 Formation Design") {
-                        if homeTeamSize == 11 {
-                            Picker("Home", selection: $homeFormation) {
-                                ForEach(Formation.allCases) { formation in
-                                    Text(formation.rawValue).tag(formation)
-                                }
-                            }
-                        }
-
-                        if awayTeamSize == 11 {
-                            Picker("Away", selection: $awayFormation) {
-                                ForEach(Formation.allCases) { formation in
-                                    Text(formation.rawValue).tag(formation)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Section("Team Colors") {
-                    ColorPicker("Home Color", selection: $homeTeamColor)
-                    ColorPicker("Away Color", selection: $awayTeamColor)
-                }
-
-                Section("Team Actions") {
-                    Button("Flip Team Sides") { flipTeamSides() }
-                    Button("Renumber Both Teams") { renumberTeams() }
-                }
-
-                Section("Tactical Notes") {
-                    TextEditor(text: $notes)
-                        .frame(minHeight: 120)
-                }
-            }
-            .navigationTitle("Player Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
-enum LineupFactory {
-    static func makePlayers(homeSize: Int, awaySize: Int, homeFormation: Formation, awayFormation: Formation) -> [PlayerToken] {
-        let home = makeTeamPlayers(count: homeSize, team: .home, formation: homeFormation)
-        let away = makeTeamPlayers(count: awaySize, team: .away, formation: awayFormation)
-        return home + away
-    }
-
-    private static func makeTeamPlayers(count: Int, team: TeamSide, formation: Formation) -> [PlayerToken] {
-        let safeCount = max(5, min(11, count))
-
-        if safeCount == 11 {
-            let anchors = anchorsForEleven(formation: formation)
-            return anchors.map { anchor in
-                PlayerToken(
-                    team: team,
-                    number: anchor.number,
-                    x: anchor.x,
-                    y: mappedY(anchor.y, for: team)
-                )
-            }
-        }
-
-        let anchors = anchorsForSmallSided(count: safeCount)
-        return anchors.map { anchor in
-            PlayerToken(
-                team: team,
-                number: anchor.number,
-                x: anchor.x,
-                y: mappedY(anchor.y, for: team)
-            )
-        }
-    }
-
-    private static func mappedY(_ y: CGFloat, for team: TeamSide) -> CGFloat {
-        team == .home ? y : 1 - y
-    }
-
-    private static func anchorsForEleven(formation: Formation) -> [LineupAnchor] {
-        switch formation {
-        case .fourThreeThree:
-            return [
-                LineupAnchor(number: 1, x: 0.50, y: 0.94),
-                LineupAnchor(number: 3, x: 0.18, y: 0.82),
-                LineupAnchor(number: 5, x: 0.38, y: 0.81),
-                LineupAnchor(number: 4, x: 0.62, y: 0.81),
-                LineupAnchor(number: 2, x: 0.82, y: 0.82),
-                LineupAnchor(number: 6, x: 0.50, y: 0.72),
-                LineupAnchor(number: 8, x: 0.35, y: 0.67),
-                LineupAnchor(number: 10, x: 0.65, y: 0.67),
-                LineupAnchor(number: 11, x: 0.22, y: 0.58),
-                LineupAnchor(number: 9, x: 0.50, y: 0.56),
-                LineupAnchor(number: 7, x: 0.78, y: 0.58)
-            ]
-
-        case .fourFourTwo:
-            return [
-                LineupAnchor(number: 1, x: 0.50, y: 0.94),
-                LineupAnchor(number: 3, x: 0.18, y: 0.82),
-                LineupAnchor(number: 5, x: 0.38, y: 0.81),
-                LineupAnchor(number: 4, x: 0.62, y: 0.81),
-                LineupAnchor(number: 2, x: 0.82, y: 0.82),
-                LineupAnchor(number: 11, x: 0.18, y: 0.70),
-                LineupAnchor(number: 6, x: 0.38, y: 0.68),
-                LineupAnchor(number: 8, x: 0.62, y: 0.68),
-                LineupAnchor(number: 7, x: 0.82, y: 0.70),
-                LineupAnchor(number: 10, x: 0.40, y: 0.58),
-                LineupAnchor(number: 9, x: 0.60, y: 0.58)
-            ]
-
-        case .fourTwoThreeOne:
-            return [
-                LineupAnchor(number: 1, x: 0.50, y: 0.94),
-                LineupAnchor(number: 3, x: 0.18, y: 0.82),
-                LineupAnchor(number: 5, x: 0.38, y: 0.81),
-                LineupAnchor(number: 4, x: 0.62, y: 0.81),
-                LineupAnchor(number: 2, x: 0.82, y: 0.82),
-                LineupAnchor(number: 6, x: 0.42, y: 0.71),
-                LineupAnchor(number: 8, x: 0.58, y: 0.71),
-                LineupAnchor(number: 11, x: 0.22, y: 0.63),
-                LineupAnchor(number: 10, x: 0.50, y: 0.62),
-                LineupAnchor(number: 7, x: 0.78, y: 0.63),
-                LineupAnchor(number: 9, x: 0.50, y: 0.56)
-            ]
-        }
-    }
-
-    private static func anchorsForSmallSided(count: Int) -> [LineupAnchor] {
-        let lineShapes: [Int]
-
-        switch count {
-        case 5: lineShapes = [1, 2, 1]
-        case 6: lineShapes = [2, 2, 1]
-        case 7: lineShapes = [2, 3, 1]
-        case 8: lineShapes = [3, 2, 2]
-        case 9: lineShapes = [3, 3, 2]
-        case 10: lineShapes = [4, 3, 2]
-        default: lineShapes = [4, 3, 3]
-        }
-
-        var anchors: [LineupAnchor] = [LineupAnchor(number: 1, x: 0.50, y: 0.94)]
-        var numberCursor = 2
-
-        let backY: CGFloat = 0.82
-        let frontY: CGFloat = 0.58
-
-        for (lineIndex, countInLine) in lineShapes.enumerated() {
-            let progress = lineShapes.count == 1 ? 0 : CGFloat(lineIndex) / CGFloat(lineShapes.count - 1)
-            let y = backY - ((backY - frontY) * progress)
-            let xPositions = evenlySpacedX(count: countInLine)
-
-            for x in xPositions {
-                anchors.append(LineupAnchor(number: numberCursor, x: x, y: y))
-                numberCursor += 1
-            }
-        }
-
-        return Array(anchors.prefix(count))
-    }
-
-    private static func evenlySpacedX(count: Int) -> [CGFloat] {
-        guard count > 1 else { return [0.5] }
-
-        let minX: CGFloat = 0.18
-        let maxX: CGFloat = 0.82
-        let step = (maxX - minX) / CGFloat(count - 1)
-
-        return (0..<count).map { index in
-            minX + (CGFloat(index) * step)
-        }
-    }
-}
-
-struct LineupAnchor {
-    var number: Int
-    var x: CGFloat
-    var y: CGFloat
-}
-
-private func clamp(_ value: CGFloat, min lower: CGFloat, max upper: CGFloat) -> CGFloat {
-    Swift.min(upper, Swift.max(lower, value))
 }
