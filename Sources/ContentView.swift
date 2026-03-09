@@ -12,6 +12,8 @@ struct ContentView: View {
     @State private var inkColor: Color = .yellow
     @State private var strokeWidth: CGFloat = 5
     @State private var strokeOpacity: Double = 0.9
+    @State private var homeTeamColor: Color = Color(red: 0.82, green: 0.13, blue: 0.16)
+    @State private var awayTeamColor: Color = Color(red: 0.10, green: 0.40, blue: 0.90)
 
     @State private var homeTeamSize: Int = 11
     @State private var awayTeamSize: Int = 11
@@ -33,45 +35,47 @@ struct ContentView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                GeometryReader { geometry in
-                    let fieldSize = measuredFieldSize(in: geometry.size)
+                VStack(spacing: 10) {
+                    topPanel
+                    modePanel
 
-                    ZStack {
-                        SoccerFieldView()
+                    GeometryReader { geometry in
+                        let fieldSize = measuredFieldSize(in: geometry.size)
 
-                        PencilCanvasRepresentable(
-                            canvasView: $canvasView,
-                            tool: activeTool,
-                            isDrawingEnabled: interactionMode == .draw
-                        )
+                        ZStack {
+                            SoccerFieldView()
 
-                        ForEach($players) { $player in
-                            PlayerMarkerView(
-                                player: $player,
-                                isSelected: selectedPlayerID == player.id,
-                                fieldSize: fieldSize,
-                                isEditable: interactionMode == .players
+                            PencilCanvasRepresentable(
+                                canvasView: $canvasView,
+                                tool: activeTool,
+                                isDrawingEnabled: interactionMode == .draw
                             )
-                            .onTapGesture {
-                                guard interactionMode == .players else { return }
-                                selectedPlayerID = player.id
+
+                            ForEach($players) { $player in
+                                PlayerMarkerView(
+                                    player: $player,
+                                    isSelected: selectedPlayerID == player.id,
+                                    fieldSize: fieldSize,
+                                    isEditable: interactionMode == .players,
+                                    homeColor: homeTeamColor,
+                                    awayColor: awayTeamColor
+                                )
+                                .onTapGesture {
+                                    guard interactionMode == .players else { return }
+                                    selectedPlayerID = player.id
+                                }
                             }
                         }
-
-                        teamCountOverlay
+                        .frame(width: fieldSize.width, height: fieldSize.height)
+                        .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                        .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 4)
                     }
-                    .frame(width: fieldSize.width, height: fieldSize.height)
-                    .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
-                    .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 4)
-                }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                topOverlay
-
-                VStack {
-                    Spacer()
                     bottomOverlay
                 }
                 .padding(.horizontal, 12)
+                .padding(.top, 10)
                 .padding(.bottom, 12)
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -81,6 +85,8 @@ struct ContentView: View {
                     awayTeamSize: $awayTeamSize,
                     homeFormation: $homeFormation,
                     awayFormation: $awayFormation,
+                    homeTeamColor: $homeTeamColor,
+                    awayTeamColor: $awayTeamColor,
                     drawingMode: $drawingMode,
                     inkStyle: $inkStyle,
                     inkColor: $inkColor,
@@ -118,57 +124,53 @@ struct ContentView: View {
         }
     }
 
-    private var topOverlay: some View {
+    private var topPanel: some View {
+        HStack(spacing: 10) {
+            TeamCountPill(
+                title: "Home",
+                count: players.filter { $0.team == .home }.count,
+                color: homeTeamColor
+            )
+
+            Spacer()
+
+            Button {
+                isControlSheetPresented = true
+            } label: {
+                Label("Menu", systemImage: "line.3.horizontal.decrease.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.green)
+
+            Spacer()
+
+            TeamCountPill(
+                title: "Away",
+                count: players.filter { $0.team == .away }.count,
+                color: awayTeamColor
+            )
+        }
+        .padding(10)
+        .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var modePanel: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Text("Soccer Game Planner")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.white)
-
-                Spacer()
-
-                Button {
-                    isControlSheetPresented = true
-                } label: {
-                    Label("Menu", systemImage: "line.3.horizontal.decrease.circle.fill")
-                        .font(.subheadline.weight(.semibold))
+            Picker("Interaction", selection: $interactionMode) {
+                ForEach(InteractionMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
             }
+            .pickerStyle(.segmented)
 
-            HStack {
-                Picker("Interaction", selection: $interactionMode) {
-                    ForEach(InteractionMode.allCases, id: \.self) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            Text("Initial kickoff layout: \(homeTeamSize)v\(awayTeamSize), soccer-proportional full pitch")
+            Text("Initial layout keeps each team in its own half. You can change team colors from Menu.")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.82))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)
         .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-    }
-
-    private var teamCountOverlay: some View {
-        VStack {
-            HStack {
-                TeamCountPill(title: "Home", count: players.filter { $0.team == .home }.count, color: TeamSide.home.color)
-                Spacer()
-                TeamCountPill(title: "Away", count: players.filter { $0.team == .away }.count, color: TeamSide.away.color)
-            }
-            .padding(10)
-
-            Spacer()
-        }
-        .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -372,6 +374,8 @@ struct PlayerMarkerView: View {
     let isSelected: Bool
     let fieldSize: CGSize
     let isEditable: Bool
+    let homeColor: Color
+    let awayColor: Color
 
     private let markerSize: CGFloat = 36
 
@@ -387,7 +391,7 @@ struct PlayerMarkerView: View {
     private var markerBody: some View {
         ZStack {
             Circle()
-                .fill(player.team.color)
+                .fill(player.team == .home ? homeColor : awayColor)
                 .overlay(
                     Circle()
                         .stroke(.white, lineWidth: isSelected ? 3 : 1.6)
@@ -465,10 +469,6 @@ struct SoccerFieldLinesShape: Shape {
         let fieldRect = rect
 
         path.addRect(fieldRect)
-
-        let halfwayY = y(52.5, in: fieldRect)
-        path.move(to: CGPoint(x: fieldRect.minX, y: halfwayY))
-        path.addLine(to: CGPoint(x: fieldRect.maxX, y: halfwayY))
 
         let centerRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: fieldRect)
         let center = CGPoint(x: x(34, in: fieldRect), y: y(52.5, in: fieldRect))
@@ -608,6 +608,8 @@ struct CoachMenuSheet: View {
     @Binding var awayTeamSize: Int
     @Binding var homeFormation: Formation
     @Binding var awayFormation: Formation
+    @Binding var homeTeamColor: Color
+    @Binding var awayTeamColor: Color
 
     @Binding var drawingMode: DrawingMode
     @Binding var inkStyle: InkStyle
@@ -670,6 +672,11 @@ struct CoachMenuSheet: View {
                             }
                         }
                     }
+                }
+
+                Section("Team Colors") {
+                    ColorPicker("Home Color", selection: $homeTeamColor)
+                    ColorPicker("Away Color", selection: $awayTeamColor)
                 }
 
                 Section("Drawing") {
@@ -774,12 +781,12 @@ enum LineupFactory {
                 LineupAnchor(number: 5, x: 0.38, y: 0.81),
                 LineupAnchor(number: 4, x: 0.62, y: 0.81),
                 LineupAnchor(number: 2, x: 0.82, y: 0.82),
-                LineupAnchor(number: 6, x: 0.50, y: 0.69),
-                LineupAnchor(number: 8, x: 0.35, y: 0.60),
-                LineupAnchor(number: 10, x: 0.65, y: 0.60),
-                LineupAnchor(number: 11, x: 0.22, y: 0.45),
-                LineupAnchor(number: 9, x: 0.50, y: 0.40),
-                LineupAnchor(number: 7, x: 0.78, y: 0.45)
+                LineupAnchor(number: 6, x: 0.50, y: 0.72),
+                LineupAnchor(number: 8, x: 0.35, y: 0.67),
+                LineupAnchor(number: 10, x: 0.65, y: 0.67),
+                LineupAnchor(number: 11, x: 0.22, y: 0.58),
+                LineupAnchor(number: 9, x: 0.50, y: 0.56),
+                LineupAnchor(number: 7, x: 0.78, y: 0.58)
             ]
 
         case .fourFourTwo:
@@ -789,12 +796,12 @@ enum LineupFactory {
                 LineupAnchor(number: 5, x: 0.38, y: 0.81),
                 LineupAnchor(number: 4, x: 0.62, y: 0.81),
                 LineupAnchor(number: 2, x: 0.82, y: 0.82),
-                LineupAnchor(number: 11, x: 0.18, y: 0.62),
-                LineupAnchor(number: 6, x: 0.38, y: 0.64),
-                LineupAnchor(number: 8, x: 0.62, y: 0.64),
-                LineupAnchor(number: 7, x: 0.82, y: 0.62),
-                LineupAnchor(number: 10, x: 0.40, y: 0.44),
-                LineupAnchor(number: 9, x: 0.60, y: 0.44)
+                LineupAnchor(number: 11, x: 0.18, y: 0.70),
+                LineupAnchor(number: 6, x: 0.38, y: 0.68),
+                LineupAnchor(number: 8, x: 0.62, y: 0.68),
+                LineupAnchor(number: 7, x: 0.82, y: 0.70),
+                LineupAnchor(number: 10, x: 0.40, y: 0.58),
+                LineupAnchor(number: 9, x: 0.60, y: 0.58)
             ]
 
         case .fourTwoThreeOne:
@@ -804,12 +811,12 @@ enum LineupFactory {
                 LineupAnchor(number: 5, x: 0.38, y: 0.81),
                 LineupAnchor(number: 4, x: 0.62, y: 0.81),
                 LineupAnchor(number: 2, x: 0.82, y: 0.82),
-                LineupAnchor(number: 6, x: 0.42, y: 0.68),
-                LineupAnchor(number: 8, x: 0.58, y: 0.68),
-                LineupAnchor(number: 11, x: 0.22, y: 0.54),
-                LineupAnchor(number: 10, x: 0.50, y: 0.56),
-                LineupAnchor(number: 7, x: 0.78, y: 0.54),
-                LineupAnchor(number: 9, x: 0.50, y: 0.40)
+                LineupAnchor(number: 6, x: 0.42, y: 0.71),
+                LineupAnchor(number: 8, x: 0.58, y: 0.71),
+                LineupAnchor(number: 11, x: 0.22, y: 0.63),
+                LineupAnchor(number: 10, x: 0.50, y: 0.62),
+                LineupAnchor(number: 7, x: 0.78, y: 0.63),
+                LineupAnchor(number: 9, x: 0.50, y: 0.56)
             ]
         }
     }
@@ -831,7 +838,7 @@ enum LineupFactory {
         var numberCursor = 2
 
         let backY: CGFloat = 0.82
-        let frontY: CGFloat = 0.44
+        let frontY: CGFloat = 0.58
 
         for (lineIndex, countInLine) in lineShapes.enumerated() {
             let progress = lineShapes.count == 1 ? 0 : CGFloat(lineIndex) / CGFloat(lineShapes.count - 1)
