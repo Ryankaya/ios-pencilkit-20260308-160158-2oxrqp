@@ -422,39 +422,40 @@ struct PlayerMarkerView: View {
 
 struct SoccerFieldView: View {
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 18)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(red: 0.10, green: 0.47, blue: 0.20), Color(red: 0.06, green: 0.34, blue: 0.15)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+        // Draw the pitch in one pass so there are no view seams that can look like fake center lines.
+        Canvas { context, size in
+            let canvasRect = CGRect(origin: .zero, size: size)
+            let roundedPath = RoundedRectangle(cornerRadius: 18).path(in: canvasRect)
+            context.fill(
+                roundedPath,
+                with: .linearGradient(
+                    Gradient(colors: [Color(red: 0.10, green: 0.47, blue: 0.20), Color(red: 0.06, green: 0.34, blue: 0.15)]),
+                    startPoint: CGPoint(x: canvasRect.midX, y: canvasRect.minY),
+                    endPoint: CGPoint(x: canvasRect.midX, y: canvasRect.maxY)
                 )
+            )
 
-            GeometryReader { geometry in
-                let stripeHeight = geometry.size.height / 12
-
-                ForEach(0..<12, id: \.self) { stripe in
-                    Rectangle()
-                        .fill(stripe.isMultiple(of: 2) ? .white.opacity(0.05) : .clear)
-                        .frame(height: stripeHeight)
-                        .position(
-                            x: geometry.size.width / 2,
-                            y: (CGFloat(stripe) + 0.5) * stripeHeight
-                        )
-                }
+            let stripeCount = 12
+            let stripeHeight = size.height / CGFloat(stripeCount)
+            for stripe in 0..<stripeCount where stripe.isMultiple(of: 2) {
+                let stripeRect = CGRect(
+                    x: 0,
+                    y: CGFloat(stripe) * stripeHeight,
+                    width: size.width,
+                    height: stripeHeight
+                )
+                context.fill(Path(stripeRect), with: .color(.white.opacity(0.05)))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 18))
 
-            SoccerFieldLinesShape()
-                .stroke(.white.opacity(0.95), lineWidth: 2)
-                .padding(8)
-
-            SoccerSpotMarks()
-                .fill(.white)
-                .padding(8)
+            let fieldRect = canvasRect.insetBy(dx: 8, dy: 8)
+            context.stroke(
+                SoccerPitchPathBuilder.markings(in: fieldRect, includeHalfwayLine: true),
+                with: .color(.white.opacity(0.95)),
+                lineWidth: 2
+            )
+            context.fill(SoccerPitchPathBuilder.spots(in: fieldRect), with: .color(.white))
         }
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 }
 
@@ -469,13 +470,19 @@ enum SoccerPitchMetrics {
     static let penaltyMarkDistance: CGFloat = 11
 }
 
-struct SoccerFieldLinesShape: Shape {
-    func path(in rect: CGRect) -> Path {
+enum SoccerPitchPathBuilder {
+    static func markings(in rect: CGRect, includeHalfwayLine: Bool) -> Path {
         var path = Path()
 
         let fieldRect = rect
 
         path.addRect(fieldRect)
+
+        if includeHalfwayLine {
+            let halfwayY = y(52.5, in: fieldRect)
+            path.move(to: CGPoint(x: fieldRect.minX, y: halfwayY))
+            path.addLine(to: CGPoint(x: fieldRect.maxX, y: halfwayY))
+        }
 
         let centerRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: fieldRect)
         let center = CGPoint(x: x(34, in: fieldRect), y: y(52.5, in: fieldRect))
@@ -549,25 +556,7 @@ struct SoccerFieldLinesShape: Shape {
         return path
     }
 
-    private func x(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
-        rect.minX + (meters / SoccerPitchMetrics.width) * rect.width
-    }
-
-    private func y(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
-        rect.minY + (meters / SoccerPitchMetrics.length) * rect.height
-    }
-
-    private func scaleX(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
-        (meters / SoccerPitchMetrics.width) * rect.width
-    }
-
-    private func scaleY(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
-        (meters / SoccerPitchMetrics.length) * rect.height
-    }
-}
-
-struct SoccerSpotMarks: Shape {
-    func path(in rect: CGRect) -> Path {
+    static func spots(in rect: CGRect) -> Path {
         var path = Path()
 
         addSpot(to: &path, xMeters: SoccerPitchMetrics.width / 2, yMeters: SoccerPitchMetrics.length / 2, in: rect)
@@ -577,10 +566,26 @@ struct SoccerSpotMarks: Shape {
         return path
     }
 
-    private func addSpot(to path: inout Path, xMeters: CGFloat, yMeters: CGFloat, in rect: CGRect) {
+    private static func addSpot(to path: inout Path, xMeters: CGFloat, yMeters: CGFloat, in rect: CGRect) {
         let x = rect.minX + (xMeters / SoccerPitchMetrics.width) * rect.width
         let y = rect.minY + (yMeters / SoccerPitchMetrics.length) * rect.height
         path.addEllipse(in: CGRect(x: x - 2.5, y: y - 2.5, width: 5, height: 5))
+    }
+
+    private static func x(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
+        rect.minX + (meters / SoccerPitchMetrics.width) * rect.width
+    }
+
+    private static func y(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
+        rect.minY + (meters / SoccerPitchMetrics.length) * rect.height
+    }
+
+    private static func scaleX(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
+        (meters / SoccerPitchMetrics.width) * rect.width
+    }
+
+    private static func scaleY(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
+        (meters / SoccerPitchMetrics.length) * rect.height
     }
 }
 
