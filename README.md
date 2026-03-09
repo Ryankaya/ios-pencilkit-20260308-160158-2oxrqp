@@ -1,38 +1,46 @@
 # Soccer Game Planner (PencilKit)
 
-A practical iOS tactics app focused on soccer planning.
+A practical soccer tactics board for iOS built with SwiftUI + PencilKit.
 
-This version is redesigned to support **both teams (home + opponent)**, configurable team sizes (like **11v11**, **8v8**), and a cleaner **menu/sheet-driven UI** so controls are hidden until needed.
+## What Changed (Soccer-Accurate Redesign)
 
-## Core Features
+- Initial screen now opens as a full soccer pitch with realistic proportions.
+- Pitch markings are based on real dimensions:
+  - Full field ratio: `68m x 105m`
+  - Center circle
+  - Penalty areas
+  - Goal areas
+  - Penalty marks
+  - Penalty arcs
+- Both teams are placed on the field at launch with soccer-style kickoff lineups.
+- Default kickoff is `11v11` with proper formation-based spacing.
 
-- Accurate soccer field background with pitch markings.
-- Two-team planning on the same field:
-  - Home team markers
-  - Opponent team markers
-- Configurable team sizes (`5...11` each) for formats such as:
-  - `11v11`
-  - `9v9`
-  - `8v8`
-  - `7v7`
-  - `5v5`
-- Draggable numbered players with editable number and team.
-- Compact UI with opener sheets:
-  - `Teams` sheet for size/preset/actions
-  - `Tools` sheet for drawing setup
-- PencilKit tactical drawing:
-  - Ink / Eraser / Lasso
-  - Ink type, color, width, opacity
-  - Undo / Redo / Clear drawing
-- Notes section for tactical details.
+## Team and Match Features
 
-## Why This Matches the Request
+- Home + Away team markers simultaneously on one field.
+- Team sizes adjustable from `5...11` per side.
+- Quick presets: `11v11`, `9v9`, `8v8`, `7v7`, `5v5`.
+- For 11-player teams, formation options:
+  - `4-3-3`
+  - `4-4-2`
+  - `4-2-3-1`
+- Player markers are draggable in Players mode.
+- Tap a marker to edit jersey number and team.
 
-- The planner is now explicitly soccer-field-first.
-- Opponent team planning is enabled by default.
-- Team-size formats are configurable, including 11v11 and 8v8.
-- Unnecessary always-visible buttons were removed from the main screen.
-- Controls are hidden behind opener-style sheets for cleaner interaction.
+## Cleaner UI (Menu-Driven)
+
+- Main screen is now pitch-first with minimal controls.
+- Extra controls are hidden in a single **Coach Menu** sheet:
+  - Match setup and lineups
+  - Drawing tools
+  - Notes and quick actions
+
+## Drawing Features
+
+- PencilKit drawing over the pitch:
+  - Ink, Eraser, Lasso
+  - Ink style, color, width, opacity
+  - Undo / Redo / Clear drawings
 
 ## Apple Documentation Links
 
@@ -44,5 +52,5 @@ This version is redesigned to support **both teams (home + opponent)**, configur
 ## Run
 
 1. `xcodegen generate`
-2. Open `ios-pencilkit-20260308-160158-2oxrqp.xcodeproj`.
+2. Open `ios-pencilkit-20260308-160158-2oxrqp.xcodeproj` in Xcode.
 3. Run on iOS 17+ simulator/device.

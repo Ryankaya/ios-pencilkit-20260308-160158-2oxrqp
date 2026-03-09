@@ -6,28 +6,36 @@ struct ContentView: View {
     @State private var canvasView = PKCanvasView()
 
     @State private var interactionMode: InteractionMode = .draw
+
     @State private var drawingMode: DrawingMode = .ink
     @State private var inkStyle: InkStyle = .pen
-    @State private var inkColor: Color = .red
-    @State private var strokeWidth: CGFloat = 6
+    @State private var inkColor: Color = .yellow
+    @State private var strokeWidth: CGFloat = 5
     @State private var strokeOpacity: Double = 0.9
 
     @State private var homeTeamSize: Int = 11
     @State private var awayTeamSize: Int = 11
-    @State private var players: [PlayerToken] = FormationBuilder.generate(homeCount: 11, awayCount: 11)
+    @State private var homeFormation: Formation = .fourThreeThree
+    @State private var awayFormation: Formation = .fourThreeThree
+    @State private var players: [PlayerToken] = LineupFactory.makePlayers(
+        homeSize: 11,
+        awaySize: 11,
+        homeFormation: .fourThreeThree,
+        awayFormation: .fourThreeThree
+    )
+
     @State private var selectedPlayerID: UUID?
-
-    @State private var notes: String = "Drag players in Players mode. Draw arrows, zones, and movement patterns in Draw mode."
-
-    @State private var isTeamSheetPresented = false
-    @State private var isDrawSheetPresented = false
+    @State private var notes: String = "Kickoff lineup loaded. Draw pressing lines, passing lanes, and defensive shape."
+    @State private var isControlSheetPresented = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                topControls
+            ZStack {
+                Color.black.ignoresSafeArea()
 
                 GeometryReader { geometry in
+                    let fieldSize = measuredFieldSize(in: geometry.size)
+
                     ZStack {
                         SoccerFieldView()
 
@@ -41,66 +49,54 @@ struct ContentView: View {
                             PlayerMarkerView(
                                 player: $player,
                                 isSelected: selectedPlayerID == player.id,
-                                fieldSize: geometry.size
+                                fieldSize: fieldSize,
+                                isEditable: interactionMode == .players
                             )
-                            .allowsHitTesting(interactionMode == .players)
                             .onTapGesture {
-                                if interactionMode == .players {
-                                    selectedPlayerID = player.id
-                                }
+                                guard interactionMode == .players else { return }
+                                selectedPlayerID = player.id
                             }
                         }
 
-                        matchInfoOverlay
+                        teamCountOverlay
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(.white.opacity(0.18), lineWidth: 1)
-                    )
-                }
-                .frame(minHeight: 420)
-
-                if interactionMode == .players {
-                    selectedPlayerEditor
+                    .frame(width: fieldSize.width, height: fieldSize.height)
+                    .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                    .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 4)
                 }
 
-                notesPanel
+                topOverlay
+
+                VStack {
+                    Spacer()
+                    bottomOverlay
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
-            .padding()
-            .background(
-                LinearGradient(
-                    colors: [Color(red: 0.04, green: 0.08, blue: 0.06), Color(red: 0.02, green: 0.05, blue: 0.04)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .navigationTitle("Soccer Game Planner")
-            .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $isTeamSheetPresented) {
-                TeamSetupSheet(
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $isControlSheetPresented) {
+                CoachMenuSheet(
                     homeTeamSize: $homeTeamSize,
                     awayTeamSize: $awayTeamSize,
-                    applyTeamSize: applyTeamSize,
-                    usePreset: usePreset,
-                    flipSides: flipSides,
-                    renumberTeams: renumberTeams
-                )
-            }
-            .sheet(isPresented: $isDrawSheetPresented) {
-                DrawingToolsSheet(
+                    homeFormation: $homeFormation,
+                    awayFormation: $awayFormation,
                     drawingMode: $drawingMode,
                     inkStyle: $inkStyle,
                     inkColor: $inkColor,
                     strokeWidth: $strokeWidth,
                     strokeOpacity: $strokeOpacity,
-                    undo: { canvasView.undoManager?.undo() },
-                    redo: { canvasView.undoManager?.redo() },
-                    clearDrawing: { canvasView.drawing = PKDrawing() }
+                    notes: $notes,
+                    applyKickoffLineup: applyKickoffLineup,
+                    flipTeamSides: flipTeamSides,
+                    renumberTeams: renumberTeams,
+                    clearDrawings: { canvasView.drawing = PKDrawing() },
+                    undoDrawing: { canvasView.undoManager?.undo() },
+                    redoDrawing: { canvasView.undoManager?.redo() }
                 )
             }
-            .onChange(of: interactionMode) { _, newValue in
-                if newValue == .draw {
+            .onChange(of: interactionMode) { _, mode in
+                if mode == .draw {
                     selectedPlayerID = nil
                 }
             }
@@ -111,7 +107,7 @@ struct ContentView: View {
         switch drawingMode {
         case .ink:
             return PKInkingTool(
-                inkStyle.pkType,
+                inkStyle.pkInkType,
                 color: UIColor(inkColor).withAlphaComponent(strokeOpacity),
                 width: strokeWidth
             )
@@ -122,139 +118,136 @@ struct ContentView: View {
         }
     }
 
-    private var topControls: some View {
+    private var topOverlay: some View {
         VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Text("Soccer Game Planner")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                Button {
+                    isControlSheetPresented = true
+                } label: {
+                    Label("Menu", systemImage: "line.3.horizontal.decrease.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+            }
+
             HStack {
-                Picker("Mode", selection: $interactionMode) {
+                Picker("Interaction", selection: $interactionMode) {
                     ForEach(InteractionMode.allCases, id: \.self) { mode in
                         Text(mode.title).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
-
-                Button {
-                    isTeamSheetPresented = true
-                } label: {
-                    Label("Teams", systemImage: "person.3.sequence.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-
-                if interactionMode == .draw {
-                    Button {
-                        isDrawSheetPresented = true
-                    } label: {
-                        Label("Tools", systemImage: "slider.horizontal.3")
-                    }
-                    .buttonStyle(.bordered)
-                }
             }
 
-            if interactionMode == .players {
-                Text("Players mode: drag markers, tap one to edit number/team.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                Text("Draw mode: sketch movement and areas directly on the pitch.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            Text("Initial kickoff layout: \(homeTeamSize)v\(awayTeamSize), soccer-proportional full pitch")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.82))
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)
-        .background(.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 12))
+        .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
     }
 
-    private var matchInfoOverlay: some View {
+    private var teamCountOverlay: some View {
         VStack {
             HStack {
-                TeamBadge(title: "Home", color: TeamSide.home.color, count: players.filter { $0.team == .home }.count)
+                TeamCountPill(title: "Home", count: players.filter { $0.team == .home }.count, color: TeamSide.home.color)
                 Spacer()
-                TeamBadge(title: "Away", color: TeamSide.away.color, count: players.filter { $0.team == .away }.count)
+                TeamCountPill(title: "Away", count: players.filter { $0.team == .away }.count, color: TeamSide.away.color)
             }
+            .padding(10)
+
             Spacer()
         }
-        .padding(10)
         .allowsHitTesting(false)
     }
 
-    private var selectedPlayerEditor: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Selected Player")
-                .font(.headline)
+    @ViewBuilder
+    private var bottomOverlay: some View {
+        if interactionMode == .players, let selectedIndex {
+            HStack(spacing: 12) {
+                Stepper(
+                    "#\(players[selectedIndex].number)",
+                    value: $players[selectedIndex].number,
+                    in: 1...99
+                )
                 .foregroundStyle(.white)
 
-            if let index = selectedPlayerIndex {
-                HStack(spacing: 12) {
-                    Stepper("Number: \(players[index].number)", value: $players[index].number, in: 1...99)
-                        .foregroundStyle(.white)
-
-                    Picker("Team", selection: $players[index].team) {
-                        ForEach(TeamSide.allCases, id: \.self) { team in
-                            Text(team.title).tag(team)
-                        }
+                Picker("Team", selection: $players[selectedIndex].team) {
+                    ForEach(TeamSide.allCases, id: \.self) { team in
+                        Text(team.title).tag(team)
                     }
-                    .pickerStyle(.segmented)
                 }
-            } else {
-                Text("Tap a player marker to edit it.")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.82))
+                .pickerStyle(.segmented)
             }
+            .padding(10)
+            .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+        } else {
+            Text(interactionMode == .draw ?
+                 "Draw mode: sketch arrows and zones directly over the soccer pitch." :
+                    "Players mode: drag markers and tap one to edit jersey/team.")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.84))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.black.opacity(0.45), in: Capsule())
         }
-        .padding(10)
-        .background(.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var notesPanel: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Plan Notes")
-                .font(.headline)
-                .foregroundStyle(.white)
-
-            TextEditor(text: $notes)
-                .frame(height: 88)
-                .padding(6)
-                .background(.white.opacity(0.96), in: RoundedRectangle(cornerRadius: 10))
-        }
-        .padding(10)
-        .background(.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var selectedPlayerIndex: Int? {
+    private var selectedIndex: Int? {
         guard let selectedPlayerID else { return nil }
-        return players.firstIndex(where: { $0.id == selectedPlayerID })
+        return players.firstIndex { $0.id == selectedPlayerID }
     }
 
-    private func applyTeamSize() {
-        players = FormationBuilder.generate(homeCount: homeTeamSize, awayCount: awayTeamSize)
+    private func measuredFieldSize(in container: CGSize) -> CGSize {
+        let horizontalPadding: CGFloat = 16
+        let verticalPadding: CGFloat = 24
+        let maxWidth = max(120, container.width - (horizontalPadding * 2))
+        let maxHeight = max(240, container.height - (verticalPadding * 2))
+
+        let widthToLengthRatio = SoccerPitchMetrics.width / SoccerPitchMetrics.length
+        let width = min(maxWidth, maxHeight * widthToLengthRatio)
+        let height = width / widthToLengthRatio
+
+        return CGSize(width: width, height: height)
+    }
+
+    private func applyKickoffLineup() {
+        players = LineupFactory.makePlayers(
+            homeSize: homeTeamSize,
+            awaySize: awayTeamSize,
+            homeFormation: homeFormation,
+            awayFormation: awayFormation
+        )
         selectedPlayerID = nil
     }
 
-    private func usePreset(size: Int) {
-        homeTeamSize = size
-        awayTeamSize = size
-        applyTeamSize()
-    }
-
-    private func flipSides() {
+    private func flipTeamSides() {
         for index in players.indices {
             players[index].y = 1 - players[index].y
         }
     }
 
     private func renumberTeams() {
-        var homeCounter = 1
-        var awayCounter = 1
+        var homeNumber = 1
+        var awayNumber = 1
 
         for index in players.indices {
             if players[index].team == .home {
-                players[index].number = homeCounter
-                homeCounter += 1
+                players[index].number = homeNumber
+                homeNumber += 1
             } else {
-                players[index].number = awayCounter
-                awayCounter += 1
+                players[index].number = awayNumber
+                awayNumber += 1
             }
         }
     }
@@ -301,7 +294,7 @@ enum InkStyle: CaseIterable {
         }
     }
 
-    var pkType: PKInkingTool.InkType {
+    var pkInkType: PKInkingTool.InkType {
         switch self {
         case .pen: return .pen
         case .marker: return .marker
@@ -324,10 +317,18 @@ enum TeamSide: CaseIterable {
 
     var color: Color {
         switch self {
-        case .home: return Color(red: 0.84, green: 0.13, blue: 0.16)
-        case .away: return Color(red: 0.07, green: 0.44, blue: 0.91)
+        case .home: return Color(red: 0.82, green: 0.13, blue: 0.16)
+        case .away: return Color(red: 0.10, green: 0.40, blue: 0.90)
         }
     }
+}
+
+enum Formation: String, CaseIterable, Identifiable {
+    case fourThreeThree = "4-3-3"
+    case fourFourTwo = "4-4-2"
+    case fourTwoThreeOne = "4-2-3-1"
+
+    var id: String { rawValue }
 }
 
 struct PlayerToken: Identifiable {
@@ -346,100 +347,16 @@ struct PlayerToken: Identifiable {
     }
 }
 
-enum FormationBuilder {
-    static func generate(homeCount: Int, awayCount: Int) -> [PlayerToken] {
-        let safeHome = max(5, min(11, homeCount))
-        let safeAway = max(5, min(11, awayCount))
-        return buildTeam(count: safeHome, team: .home) + buildTeam(count: safeAway, team: .away)
-    }
-
-    private static func buildTeam(count: Int, team: TeamSide) -> [PlayerToken] {
-        guard count > 0 else { return [] }
-
-        var teamPlayers: [PlayerToken] = []
-        teamPlayers.reserveCapacity(count)
-
-        let goalkeeperY: CGFloat = 0.92
-        teamPlayers.append(PlayerToken(team: team, number: 1, x: 0.5, y: goalkeeperY))
-
-        let outfieldCount = max(0, count - 1)
-        guard outfieldCount > 0 else { return mirroredIfNeeded(teamPlayers, for: team) }
-
-        let lines = lineDistribution(forOutfieldCount: outfieldCount)
-        let defensiveY: CGFloat = 0.78
-        let attackingY: CGFloat = 0.30
-
-        for (lineIndex, playersInLine) in lines.enumerated() {
-            let y: CGFloat
-            if lines.count == 1 {
-                y = 0.56
-            } else {
-                let progress = CGFloat(lineIndex) / CGFloat(lines.count - 1)
-                y = defensiveY - (progress * (defensiveY - attackingY))
-            }
-
-            let xPositions = evenlySpacedPositions(count: playersInLine)
-            for x in xPositions {
-                let jerseyNumber = teamPlayers.count + 1
-                teamPlayers.append(PlayerToken(team: team, number: jerseyNumber, x: x, y: y))
-            }
-        }
-
-        return mirroredIfNeeded(teamPlayers, for: team)
-    }
-
-    private static func mirroredIfNeeded(_ players: [PlayerToken], for team: TeamSide) -> [PlayerToken] {
-        guard team == .away else { return players }
-        return players.map { player in
-            PlayerToken(
-                id: player.id,
-                team: player.team,
-                number: player.number,
-                x: player.x,
-                y: 1 - player.y
-            )
-        }
-    }
-
-    private static func lineDistribution(forOutfieldCount outfieldCount: Int) -> [Int] {
-        switch outfieldCount {
-        case 0: return []
-        case 1: return [1]
-        case 2: return [2]
-        case 3: return [2, 1]
-        case 4: return [2, 2]
-        case 5: return [2, 2, 1]
-        case 6: return [3, 2, 1]
-        case 7: return [3, 2, 2]
-        case 8: return [3, 3, 2]
-        case 9: return [4, 3, 2]
-        default: return [4, 3, 3]
-        }
-    }
-
-    private static func evenlySpacedPositions(count: Int) -> [CGFloat] {
-        guard count > 1 else { return [0.5] }
-
-        let minX: CGFloat = 0.14
-        let maxX: CGFloat = 0.86
-        let spacing = (maxX - minX) / CGFloat(count - 1)
-
-        return (0..<count).map { index in
-            minX + (CGFloat(index) * spacing)
-        }
-    }
-}
-
-struct TeamBadge: View {
+struct TeamCountPill: View {
     let title: String
-    let color: Color
     let count: Int
+    let color: Color
 
     var body: some View {
         HStack(spacing: 6) {
             Circle()
                 .fill(color)
-                .frame(width: 10, height: 10)
+                .frame(width: 9, height: 9)
             Text("\(title): \(count)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white)
@@ -454,131 +371,209 @@ struct PlayerMarkerView: View {
     @Binding var player: PlayerToken
     let isSelected: Bool
     let fieldSize: CGSize
+    let isEditable: Bool
 
     private let markerSize: CGFloat = 36
 
     var body: some View {
+        markerBody
+            .frame(width: markerSize, height: markerSize)
+            .position(x: player.x * fieldSize.width, y: player.y * fieldSize.height)
+            .gesture(dragGesture)
+            .allowsHitTesting(isEditable)
+            .shadow(color: .black.opacity(0.28), radius: 2, x: 0, y: 1)
+    }
+
+    private var markerBody: some View {
         ZStack {
             Circle()
                 .fill(player.team.color)
                 .overlay(
                     Circle()
-                        .stroke(.white, lineWidth: isSelected ? 3 : 1.4)
+                        .stroke(.white, lineWidth: isSelected ? 3 : 1.6)
                 )
 
             Text("\(player.number)")
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
         }
-        .frame(width: markerSize, height: markerSize)
-        .position(x: player.x * fieldSize.width, y: player.y * fieldSize.height)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    player.x = clamp(value.location.x / max(fieldSize.width, 1), min: 0.03, max: 0.97)
-                    player.y = clamp(value.location.y / max(fieldSize.height, 1), min: 0.03, max: 0.97)
-                }
-        )
-        .shadow(color: .black.opacity(0.24), radius: 2, x: 0, y: 1)
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard isEditable else { return }
+                player.x = clamp(value.location.x / max(fieldSize.width, 1), min: 0.04, max: 0.96)
+                player.y = clamp(value.location.y / max(fieldSize.height, 1), min: 0.04, max: 0.96)
+            }
     }
 }
 
 struct SoccerFieldView: View {
     var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let height = geometry.size.height
-
-            ZStack {
-                LinearGradient(
-                    colors: [Color(red: 0.12, green: 0.51, blue: 0.22), Color(red: 0.07, green: 0.36, blue: 0.16)],
-                    startPoint: .top,
-                    endPoint: .bottom
+        ZStack {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.10, green: 0.47, blue: 0.20), Color(red: 0.06, green: 0.34, blue: 0.15)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
 
-                ForEach(0..<10, id: \.self) { stripe in
+            GeometryReader { geometry in
+                let stripeHeight = geometry.size.height / 12
+
+                ForEach(0..<12, id: \.self) { stripe in
                     Rectangle()
                         .fill(stripe.isMultiple(of: 2) ? .white.opacity(0.05) : .clear)
-                        .frame(height: height / 10)
-                        .position(x: width / 2, y: (height / 10) * (CGFloat(stripe) + 0.5))
+                        .frame(height: stripeHeight)
+                        .position(
+                            x: geometry.size.width / 2,
+                            y: (CGFloat(stripe) + 0.5) * stripeHeight
+                        )
                 }
-
-                SoccerFieldLines()
-                    .stroke(.white.opacity(0.95), lineWidth: 2)
-
-                Circle()
-                    .fill(.white)
-                    .frame(width: 5, height: 5)
-                    .position(x: width / 2, y: height / 2)
-
-                Circle()
-                    .fill(.white)
-                    .frame(width: 5, height: 5)
-                    .position(x: width / 2, y: height * 0.84)
-
-                Circle()
-                    .fill(.white)
-                    .frame(width: 5, height: 5)
-                    .position(x: width / 2, y: height * 0.16)
             }
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+
+            SoccerFieldLinesShape()
+                .stroke(.white.opacity(0.95), lineWidth: 2)
+                .padding(8)
+
+            SoccerSpotMarks()
+                .fill(.white)
+                .padding(8)
         }
     }
 }
 
-struct SoccerFieldLines: Shape {
+enum SoccerPitchMetrics {
+    static let length: CGFloat = 105
+    static let width: CGFloat = 68
+    static let penaltyAreaDepth: CGFloat = 16.5
+    static let penaltyAreaWidth: CGFloat = 40.32
+    static let goalAreaDepth: CGFloat = 5.5
+    static let goalAreaWidth: CGFloat = 18.32
+    static let centerCircleRadius: CGFloat = 9.15
+    static let penaltyMarkDistance: CGFloat = 11
+}
+
+struct SoccerFieldLinesShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
 
-        let inset: CGFloat = 3
-        let field = rect.insetBy(dx: inset, dy: inset)
+        let fieldRect = rect
 
-        path.addRect(field)
+        path.addRect(fieldRect)
 
-        path.move(to: CGPoint(x: field.midX, y: field.minY))
-        path.addLine(to: CGPoint(x: field.midX, y: field.maxY))
+        let halfwayY = y(52.5, in: fieldRect)
+        path.move(to: CGPoint(x: fieldRect.minX, y: halfwayY))
+        path.addLine(to: CGPoint(x: fieldRect.maxX, y: halfwayY))
 
-        let centerCircleRadius = field.width * 0.14
-        path.addEllipse(
-            in: CGRect(
-                x: field.midX - centerCircleRadius,
-                y: field.midY - centerCircleRadius,
-                width: centerCircleRadius * 2,
-                height: centerCircleRadius * 2
-            )
+        let centerRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: fieldRect)
+        let center = CGPoint(x: x(34, in: fieldRect), y: y(52.5, in: fieldRect))
+        path.addEllipse(in: CGRect(
+            x: center.x - centerRadius,
+            y: center.y - centerRadius,
+            width: centerRadius * 2,
+            height: centerRadius * 2
+        ))
+
+        let penaltyLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.penaltyAreaWidth) / 2
+        let goalLeftX = (SoccerPitchMetrics.width - SoccerPitchMetrics.goalAreaWidth) / 2
+
+        path.addRect(CGRect(
+            x: x(penaltyLeftX, in: fieldRect),
+            y: y(0, in: fieldRect),
+            width: scaleX(SoccerPitchMetrics.penaltyAreaWidth, in: fieldRect),
+            height: scaleY(SoccerPitchMetrics.penaltyAreaDepth, in: fieldRect)
+        ))
+
+        path.addRect(CGRect(
+            x: x(penaltyLeftX, in: fieldRect),
+            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyAreaDepth, in: fieldRect),
+            width: scaleX(SoccerPitchMetrics.penaltyAreaWidth, in: fieldRect),
+            height: scaleY(SoccerPitchMetrics.penaltyAreaDepth, in: fieldRect)
+        ))
+
+        path.addRect(CGRect(
+            x: x(goalLeftX, in: fieldRect),
+            y: y(0, in: fieldRect),
+            width: scaleX(SoccerPitchMetrics.goalAreaWidth, in: fieldRect),
+            height: scaleY(SoccerPitchMetrics.goalAreaDepth, in: fieldRect)
+        ))
+
+        path.addRect(CGRect(
+            x: x(goalLeftX, in: fieldRect),
+            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.goalAreaDepth, in: fieldRect),
+            width: scaleX(SoccerPitchMetrics.goalAreaWidth, in: fieldRect),
+            height: scaleY(SoccerPitchMetrics.goalAreaDepth, in: fieldRect)
+        ))
+
+        let topPenaltyCenter = CGPoint(
+            x: x(SoccerPitchMetrics.width / 2, in: fieldRect),
+            y: y(SoccerPitchMetrics.penaltyMarkDistance, in: fieldRect)
+        )
+        let bottomPenaltyCenter = CGPoint(
+            x: x(SoccerPitchMetrics.width / 2, in: fieldRect),
+            y: y(SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyMarkDistance, in: fieldRect)
         )
 
-        let penaltyWidth = field.width * 0.58
-        let penaltyHeight = field.height * 0.18
-        let penaltyX = field.midX - (penaltyWidth / 2)
+        let arcRadius = scaleX(SoccerPitchMetrics.centerCircleRadius, in: fieldRect)
+        let deltaY = SoccerPitchMetrics.penaltyAreaDepth - SoccerPitchMetrics.penaltyMarkDistance
+        let angle = Angle(radians: Double(asin(deltaY / SoccerPitchMetrics.centerCircleRadius)))
 
-        path.addRect(CGRect(x: penaltyX, y: field.maxY - penaltyHeight, width: penaltyWidth, height: penaltyHeight))
-        path.addRect(CGRect(x: penaltyX, y: field.minY, width: penaltyWidth, height: penaltyHeight))
-
-        let goalBoxWidth = field.width * 0.30
-        let goalBoxHeight = field.height * 0.08
-        let goalBoxX = field.midX - (goalBoxWidth / 2)
-
-        path.addRect(CGRect(x: goalBoxX, y: field.maxY - goalBoxHeight, width: goalBoxWidth, height: goalBoxHeight))
-        path.addRect(CGRect(x: goalBoxX, y: field.minY, width: goalBoxWidth, height: goalBoxHeight))
-
-        let arcRadius = field.width * 0.12
         path.addArc(
-            center: CGPoint(x: field.midX, y: field.maxY - penaltyHeight),
+            center: topPenaltyCenter,
             radius: arcRadius,
-            startAngle: .degrees(200),
-            endAngle: .degrees(340),
+            startAngle: angle,
+            endAngle: .degrees(180) - angle,
             clockwise: false
         )
 
         path.addArc(
-            center: CGPoint(x: field.midX, y: field.minY + penaltyHeight),
+            center: bottomPenaltyCenter,
             radius: arcRadius,
-            startAngle: .degrees(20),
-            endAngle: .degrees(160),
+            startAngle: .degrees(180) + angle,
+            endAngle: .degrees(360) - angle,
             clockwise: false
         )
 
         return path
+    }
+
+    private func x(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
+        rect.minX + (meters / SoccerPitchMetrics.width) * rect.width
+    }
+
+    private func y(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
+        rect.minY + (meters / SoccerPitchMetrics.length) * rect.height
+    }
+
+    private func scaleX(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
+        (meters / SoccerPitchMetrics.width) * rect.width
+    }
+
+    private func scaleY(_ meters: CGFloat, in rect: CGRect) -> CGFloat {
+        (meters / SoccerPitchMetrics.length) * rect.height
+    }
+}
+
+struct SoccerSpotMarks: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+
+        addSpot(to: &path, xMeters: SoccerPitchMetrics.width / 2, yMeters: SoccerPitchMetrics.length / 2, in: rect)
+        addSpot(to: &path, xMeters: SoccerPitchMetrics.width / 2, yMeters: SoccerPitchMetrics.penaltyMarkDistance, in: rect)
+        addSpot(to: &path, xMeters: SoccerPitchMetrics.width / 2, yMeters: SoccerPitchMetrics.length - SoccerPitchMetrics.penaltyMarkDistance, in: rect)
+
+        return path
+    }
+
+    private func addSpot(to path: inout Path, xMeters: CGFloat, yMeters: CGFloat, in rect: CGRect) {
+        let x = rect.minX + (xMeters / SoccerPitchMetrics.width) * rect.width
+        let y = rect.minY + (yMeters / SoccerPitchMetrics.length) * rect.height
+        path.addEllipse(in: CGRect(x: x - 2.5, y: y - 2.5, width: 5, height: 5))
     }
 }
 
@@ -606,102 +601,96 @@ struct PencilCanvasRepresentable: UIViewRepresentable {
     }
 }
 
-struct TeamSetupSheet: View {
+struct CoachMenuSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @Binding var homeTeamSize: Int
     @Binding var awayTeamSize: Int
-
-    let applyTeamSize: () -> Void
-    let usePreset: (Int) -> Void
-    let flipSides: () -> Void
-    let renumberTeams: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Team Size") {
-                    Stepper("Home Players: \(homeTeamSize)", value: $homeTeamSize, in: 5...11)
-                    Stepper("Away Players: \(awayTeamSize)", value: $awayTeamSize, in: 5...11)
-                    Text("Current Match: \(homeTeamSize) v \(awayTeamSize)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Button("Apply Team Size") {
-                        applyTeamSize()
-                    }
-                }
-
-                Section("Quick Presets") {
-                    HStack {
-                        ForEach([11, 9, 8, 7, 5], id: \.self) { size in
-                            Button("\(size)v\(size)") {
-                                usePreset(size)
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                }
-
-                Section("Actions") {
-                    Button("Flip Team Sides") {
-                        flipSides()
-                    }
-
-                    Button("Renumber Both Teams") {
-                        renumberTeams()
-                    }
-                }
-            }
-            .navigationTitle("Teams")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
-struct DrawingToolsSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Binding var homeFormation: Formation
+    @Binding var awayFormation: Formation
 
     @Binding var drawingMode: DrawingMode
     @Binding var inkStyle: InkStyle
     @Binding var inkColor: Color
     @Binding var strokeWidth: CGFloat
     @Binding var strokeOpacity: Double
+    @Binding var notes: String
 
-    let undo: () -> Void
-    let redo: () -> Void
-    let clearDrawing: () -> Void
+    let applyKickoffLineup: () -> Void
+    let flipTeamSides: () -> Void
+    let renumberTeams: () -> Void
+    let clearDrawings: () -> Void
+    let undoDrawing: () -> Void
+    let redoDrawing: () -> Void
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Drawing Mode") {
+                Section("Match Setup") {
+                    Stepper("Home Players: \(homeTeamSize)", value: $homeTeamSize, in: 5...11)
+                    Stepper("Away Players: \(awayTeamSize)", value: $awayTeamSize, in: 5...11)
+
+                    Text("Current setup: \(homeTeamSize)v\(awayTeamSize)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach([11, 9, 8, 7, 5], id: \.self) { size in
+                                Button("\(size)v\(size)") {
+                                    homeTeamSize = size
+                                    awayTeamSize = size
+                                    applyKickoffLineup()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                    }
+
+                    Button("Apply Kickoff Lineup") {
+                        applyKickoffLineup()
+                    }
+                }
+
+                if homeTeamSize == 11 || awayTeamSize == 11 {
+                    Section("11v11 Formation Design") {
+                        if homeTeamSize == 11 {
+                            Picker("Home", selection: $homeFormation) {
+                                ForEach(Formation.allCases) { formation in
+                                    Text(formation.rawValue).tag(formation)
+                                }
+                            }
+                        }
+
+                        if awayTeamSize == 11 {
+                            Picker("Away", selection: $awayFormation) {
+                                ForEach(Formation.allCases) { formation in
+                                    Text(formation.rawValue).tag(formation)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("Drawing") {
                     Picker("Mode", selection: $drawingMode) {
                         ForEach(DrawingMode.allCases, id: \.self) { mode in
                             Text(mode.title).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
-                }
 
-                if drawingMode == .ink {
-                    Section("Ink") {
-                        Picker("Type", selection: $inkStyle) {
+                    if drawingMode == .ink {
+                        Picker("Ink Style", selection: $inkStyle) {
                             ForEach(InkStyle.allCases, id: \.self) { style in
                                 Text(style.title).tag(style)
                             }
                         }
 
-                        ColorPicker("Color", selection: $inkColor)
+                        ColorPicker("Ink Color", selection: $inkColor)
 
                         VStack(alignment: .leading) {
-                            Text("Width: \(Int(strokeWidth))")
+                            Text("Stroke Width: \(Int(strokeWidth))")
                             Slider(value: $strokeWidth, in: 1...24, step: 1)
                         }
 
@@ -713,21 +702,168 @@ struct DrawingToolsSheet: View {
                 }
 
                 Section("Actions") {
-                    Button("Undo") { undo() }
-                    Button("Redo") { redo() }
-                    Button("Clear All Drawings", role: .destructive) { clearDrawing() }
+                    Button("Undo Drawing") { undoDrawing() }
+                    Button("Redo Drawing") { redoDrawing() }
+                    Button("Flip Team Sides") { flipTeamSides() }
+                    Button("Renumber Both Teams") { renumberTeams() }
+                    Button("Clear Drawings", role: .destructive) { clearDrawings() }
+                }
+
+                Section("Tactical Notes") {
+                    TextEditor(text: $notes)
+                        .frame(minHeight: 120)
                 }
             }
-            .navigationTitle("Drawing Tools")
+            .navigationTitle("Coach Menu")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        dismiss()
+                    }
                 }
             }
         }
         .presentationDetents([.medium, .large])
     }
+}
+
+enum LineupFactory {
+    static func makePlayers(homeSize: Int, awaySize: Int, homeFormation: Formation, awayFormation: Formation) -> [PlayerToken] {
+        let home = makeTeamPlayers(count: homeSize, team: .home, formation: homeFormation)
+        let away = makeTeamPlayers(count: awaySize, team: .away, formation: awayFormation)
+        return home + away
+    }
+
+    private static func makeTeamPlayers(count: Int, team: TeamSide, formation: Formation) -> [PlayerToken] {
+        let safeCount = max(5, min(11, count))
+
+        if safeCount == 11 {
+            let anchors = anchorsForEleven(formation: formation)
+            return anchors.map { anchor in
+                PlayerToken(
+                    team: team,
+                    number: anchor.number,
+                    x: anchor.x,
+                    y: mappedY(anchor.y, for: team)
+                )
+            }
+        }
+
+        let anchors = anchorsForSmallSided(count: safeCount)
+        return anchors.map { anchor in
+            PlayerToken(
+                team: team,
+                number: anchor.number,
+                x: anchor.x,
+                y: mappedY(anchor.y, for: team)
+            )
+        }
+    }
+
+    private static func mappedY(_ y: CGFloat, for team: TeamSide) -> CGFloat {
+        team == .home ? y : 1 - y
+    }
+
+    private static func anchorsForEleven(formation: Formation) -> [LineupAnchor] {
+        switch formation {
+        case .fourThreeThree:
+            return [
+                LineupAnchor(number: 1, x: 0.50, y: 0.94),
+                LineupAnchor(number: 3, x: 0.18, y: 0.82),
+                LineupAnchor(number: 5, x: 0.38, y: 0.81),
+                LineupAnchor(number: 4, x: 0.62, y: 0.81),
+                LineupAnchor(number: 2, x: 0.82, y: 0.82),
+                LineupAnchor(number: 6, x: 0.50, y: 0.69),
+                LineupAnchor(number: 8, x: 0.35, y: 0.60),
+                LineupAnchor(number: 10, x: 0.65, y: 0.60),
+                LineupAnchor(number: 11, x: 0.22, y: 0.45),
+                LineupAnchor(number: 9, x: 0.50, y: 0.40),
+                LineupAnchor(number: 7, x: 0.78, y: 0.45)
+            ]
+
+        case .fourFourTwo:
+            return [
+                LineupAnchor(number: 1, x: 0.50, y: 0.94),
+                LineupAnchor(number: 3, x: 0.18, y: 0.82),
+                LineupAnchor(number: 5, x: 0.38, y: 0.81),
+                LineupAnchor(number: 4, x: 0.62, y: 0.81),
+                LineupAnchor(number: 2, x: 0.82, y: 0.82),
+                LineupAnchor(number: 11, x: 0.18, y: 0.62),
+                LineupAnchor(number: 6, x: 0.38, y: 0.64),
+                LineupAnchor(number: 8, x: 0.62, y: 0.64),
+                LineupAnchor(number: 7, x: 0.82, y: 0.62),
+                LineupAnchor(number: 10, x: 0.40, y: 0.44),
+                LineupAnchor(number: 9, x: 0.60, y: 0.44)
+            ]
+
+        case .fourTwoThreeOne:
+            return [
+                LineupAnchor(number: 1, x: 0.50, y: 0.94),
+                LineupAnchor(number: 3, x: 0.18, y: 0.82),
+                LineupAnchor(number: 5, x: 0.38, y: 0.81),
+                LineupAnchor(number: 4, x: 0.62, y: 0.81),
+                LineupAnchor(number: 2, x: 0.82, y: 0.82),
+                LineupAnchor(number: 6, x: 0.42, y: 0.68),
+                LineupAnchor(number: 8, x: 0.58, y: 0.68),
+                LineupAnchor(number: 11, x: 0.22, y: 0.54),
+                LineupAnchor(number: 10, x: 0.50, y: 0.56),
+                LineupAnchor(number: 7, x: 0.78, y: 0.54),
+                LineupAnchor(number: 9, x: 0.50, y: 0.40)
+            ]
+        }
+    }
+
+    private static func anchorsForSmallSided(count: Int) -> [LineupAnchor] {
+        let lineShapes: [Int]
+
+        switch count {
+        case 5: lineShapes = [1, 2, 1]
+        case 6: lineShapes = [2, 2, 1]
+        case 7: lineShapes = [2, 3, 1]
+        case 8: lineShapes = [3, 2, 2]
+        case 9: lineShapes = [3, 3, 2]
+        case 10: lineShapes = [4, 3, 2]
+        default: lineShapes = [4, 3, 3]
+        }
+
+        var anchors: [LineupAnchor] = [LineupAnchor(number: 1, x: 0.50, y: 0.94)]
+        var numberCursor = 2
+
+        let backY: CGFloat = 0.82
+        let frontY: CGFloat = 0.44
+
+        for (lineIndex, countInLine) in lineShapes.enumerated() {
+            let progress = lineShapes.count == 1 ? 0 : CGFloat(lineIndex) / CGFloat(lineShapes.count - 1)
+            let y = backY - ((backY - frontY) * progress)
+            let xPositions = evenlySpacedX(count: countInLine)
+
+            for x in xPositions {
+                anchors.append(LineupAnchor(number: numberCursor, x: x, y: y))
+                numberCursor += 1
+            }
+        }
+
+        return Array(anchors.prefix(count))
+    }
+
+    private static func evenlySpacedX(count: Int) -> [CGFloat] {
+        guard count > 1 else { return [0.5] }
+
+        let minX: CGFloat = 0.18
+        let maxX: CGFloat = 0.82
+        let step = (maxX - minX) / CGFloat(count - 1)
+
+        return (0..<count).map { index in
+            minX + (CGFloat(index) * step)
+        }
+    }
+}
+
+struct LineupAnchor {
+    var number: Int
+    var x: CGFloat
+    var y: CGFloat
 }
 
 private func clamp(_ value: CGFloat, min lower: CGFloat, max upper: CGFloat) -> CGFloat {
