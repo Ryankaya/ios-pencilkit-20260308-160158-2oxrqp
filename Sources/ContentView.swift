@@ -28,7 +28,11 @@ struct ContentView: View {
 
     @State private var selectedPlayerID: UUID?
     @State private var notes: String = "Kickoff lineup loaded. Draw pressing lines, passing lanes, and defensive shape."
-    @State private var isControlSheetPresented = false
+    @State private var isDrawSettingsPresented = false
+    @State private var isPlayerSettingsPresented = false
+    @State private var isNameEditorPresented = false
+    @State private var namingPlayerID: UUID?
+    @State private var playerNameDraft: String = ""
     @State private var didInitializeScreen = false
 
     var body: some View {
@@ -38,7 +42,6 @@ struct ContentView: View {
 
                 VStack(spacing: 10) {
                     topPanel
-                    modePanel
 
                     GeometryReader { geometry in
                         let fieldSize = measuredFieldSize(in: geometry.size)
@@ -59,7 +62,14 @@ struct ContentView: View {
                                     fieldSize: fieldSize,
                                     isEditable: interactionMode == .players,
                                     homeColor: homeTeamColor,
-                                    awayColor: awayTeamColor
+                                    awayColor: awayTeamColor,
+                                    onLongPress: {
+                                        guard interactionMode == .players else { return }
+                                        selectedPlayerID = player.id
+                                        namingPlayerID = player.id
+                                        playerNameDraft = player.name ?? ""
+                                        isNameEditorPresented = true
+                                    }
                                 )
                                 .onTapGesture {
                                     guard interactionMode == .players else { return }
@@ -80,31 +90,51 @@ struct ContentView: View {
                 .padding(.bottom, 12)
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $isControlSheetPresented) {
-                CoachMenuSheet(
+            .sheet(isPresented: $isDrawSettingsPresented) {
+                DrawSettingsSheet(
+                    drawingMode: $drawingMode,
+                    inkStyle: $inkStyle,
+                    inkColor: $inkColor,
+                    strokeWidth: $strokeWidth,
+                    strokeOpacity: $strokeOpacity,
+                    clearDrawings: { canvasView.drawing = PKDrawing() },
+                    undoDrawing: { canvasView.undoManager?.undo() },
+                    redoDrawing: { canvasView.undoManager?.redo() }
+                )
+            }
+            .sheet(isPresented: $isPlayerSettingsPresented) {
+                PlayerSettingsSheet(
                     homeTeamSize: $homeTeamSize,
                     awayTeamSize: $awayTeamSize,
                     homeFormation: $homeFormation,
                     awayFormation: $awayFormation,
                     homeTeamColor: $homeTeamColor,
                     awayTeamColor: $awayTeamColor,
-                    drawingMode: $drawingMode,
-                    inkStyle: $inkStyle,
-                    inkColor: $inkColor,
-                    strokeWidth: $strokeWidth,
-                    strokeOpacity: $strokeOpacity,
                     notes: $notes,
                     applyKickoffLineup: applyKickoffLineup,
                     flipTeamSides: flipTeamSides,
-                    renumberTeams: renumberTeams,
-                    clearDrawings: { canvasView.drawing = PKDrawing() },
-                    undoDrawing: { canvasView.undoManager?.undo() },
-                    redoDrawing: { canvasView.undoManager?.redo() }
+                    renumberTeams: renumberTeams
                 )
+            }
+            .alert("Player Name", isPresented: $isNameEditorPresented) {
+                TextField("Name", text: $playerNameDraft)
+                Button("Save") {
+                    savePlayerName()
+                }
+                Button("Clear", role: .destructive) {
+                    clearPlayerName()
+                }
+                Button("Cancel", role: .cancel) {
+                    namingPlayerID = nil
+                }
+            } message: {
+                Text("Long press a player to show a name below the marker.")
             }
             .onChange(of: interactionMode) { _, mode in
                 if mode == .draw {
                     selectedPlayerID = nil
+                    isNameEditorPresented = false
+                    namingPlayerID = nil
                 }
             }
             .onAppear {
@@ -141,17 +171,6 @@ struct ContentView: View {
 
             Spacer()
 
-            Button {
-                isControlSheetPresented = true
-            } label: {
-                Label("Menu", systemImage: "line.3.horizontal.decrease.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.green)
-
-            Spacer()
-
             TeamCountPill(
                 title: "Away",
                 count: players.filter { $0.team == .away }.count,
@@ -162,53 +181,164 @@ struct ContentView: View {
         .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var modePanel: some View {
-        VStack(spacing: 10) {
-            Picker("Interaction", selection: $interactionMode) {
-                ForEach(InteractionMode.allCases, id: \.self) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            Text("Initial layout keeps each team in its own half. You can change team colors from Menu.")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(10)
-        .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    @ViewBuilder
     private var bottomOverlay: some View {
-        if interactionMode == .players, let selectedIndex {
-            HStack(spacing: 12) {
-                Stepper(
-                    "#\(players[selectedIndex].number)",
-                    value: $players[selectedIndex].number,
-                    in: 1...99
-                )
-                .foregroundStyle(.white)
-
-                Picker("Team", selection: $players[selectedIndex].team) {
-                    ForEach(TeamSide.allCases, id: \.self) { team in
-                        Text(team.title).tag(team)
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(InteractionMode.allCases, id: \.self) { mode in
+                    IconControlButton(
+                        systemName: mode.systemImage,
+                        accessibilityLabel: mode.title,
+                        tint: .green,
+                        isActive: interactionMode == mode
+                    ) {
+                        interactionMode = mode
                     }
                 }
-                .pickerStyle(.segmented)
+                Spacer(minLength: 0)
             }
-            .padding(10)
-            .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
-        } else {
-            Text(interactionMode == .draw ?
-                 "Draw mode: sketch arrows and zones directly over the soccer pitch." :
-                    "Players mode: drag markers and tap one to edit jersey/team.")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.84))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.black.opacity(0.45), in: Capsule())
+
+            if interactionMode == .draw {
+                drawControlBar
+            } else {
+                playerControlBar
+            }
+
+            if interactionMode == .players, let selectedIndex {
+                selectedPlayerBar(index: selectedIndex)
+            }
+        }
+        .padding(10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private var drawControlBar: some View {
+        HStack(spacing: 8) {
+            ForEach(DrawingMode.allCases, id: \.self) { mode in
+                IconControlButton(
+                    systemName: mode.systemImage,
+                    accessibilityLabel: mode.title,
+                    tint: .yellow,
+                    isActive: drawingMode == mode
+                ) {
+                    drawingMode = mode
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            IconControlButton(
+                systemName: "slider.horizontal.3",
+                accessibilityLabel: "Draw Settings",
+                tint: .green
+            ) {
+                isDrawSettingsPresented = true
+            }
+
+            IconControlButton(
+                systemName: "arrow.uturn.backward",
+                accessibilityLabel: "Undo"
+            ) {
+                canvasView.undoManager?.undo()
+            }
+
+            IconControlButton(
+                systemName: "arrow.uturn.forward",
+                accessibilityLabel: "Redo"
+            ) {
+                canvasView.undoManager?.redo()
+            }
+
+            IconControlButton(
+                systemName: "trash",
+                accessibilityLabel: "Clear Drawing",
+                tint: .red,
+                role: .destructive
+            ) {
+                canvasView.drawing = PKDrawing()
+            }
+        }
+    }
+
+    private var playerControlBar: some View {
+        HStack(spacing: 8) {
+            IconControlButton(
+                systemName: "person.3.fill",
+                accessibilityLabel: "Player Settings",
+                tint: .green
+            ) {
+                isPlayerSettingsPresented = true
+            }
+
+            IconControlButton(
+                systemName: "soccerball",
+                accessibilityLabel: "Apply Kickoff"
+            ) {
+                applyKickoffLineup()
+            }
+
+            IconControlButton(
+                systemName: "arrow.triangle.2.circlepath",
+                accessibilityLabel: "Flip Team Sides"
+            ) {
+                flipTeamSides()
+            }
+
+            IconControlButton(
+                systemName: "number.circle",
+                accessibilityLabel: "Renumber Teams"
+            ) {
+                renumberTeams()
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func selectedPlayerBar(index: Int) -> some View {
+        HStack(spacing: 8) {
+            IconControlButton(
+                systemName: "minus.circle",
+                accessibilityLabel: "Decrease Number"
+            ) {
+                players[index].number = max(1, players[index].number - 1)
+            }
+
+            Text("\(players[index].number)")
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .frame(minWidth: 34)
+
+            IconControlButton(
+                systemName: "plus.circle",
+                accessibilityLabel: "Increase Number"
+            ) {
+                players[index].number = min(99, players[index].number + 1)
+            }
+
+            Spacer(minLength: 0)
+
+            IconControlButton(
+                systemName: "house.fill",
+                accessibilityLabel: "Set Home Team",
+                tint: homeTeamColor,
+                isActive: players[index].team == .home
+            ) {
+                players[index].team = .home
+            }
+
+            IconControlButton(
+                systemName: "flag.fill",
+                accessibilityLabel: "Set Away Team",
+                tint: awayTeamColor,
+                isActive: players[index].team == .away
+            ) {
+                players[index].team = .away
+            }
         }
     }
 
@@ -231,13 +361,33 @@ struct ContentView: View {
     }
 
     private func applyKickoffLineup() {
-        players = LineupFactory.makePlayers(
+        let existingNames = players.reduce(into: [String: String]()) { nameMap, player in
+            guard let trimmedName = player.name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmedName.isEmpty else {
+                return
+            }
+            let key = playerNameKey(team: player.team, number: player.number)
+            if nameMap[key] == nil {
+                nameMap[key] = trimmedName
+            }
+        }
+
+        var updatedPlayers = LineupFactory.makePlayers(
             homeSize: homeTeamSize,
             awaySize: awayTeamSize,
             homeFormation: homeFormation,
             awayFormation: awayFormation
         )
+
+        for index in updatedPlayers.indices {
+            let key = playerNameKey(team: updatedPlayers[index].team, number: updatedPlayers[index].number)
+            updatedPlayers[index].name = existingNames[key]
+        }
+
+        players = updatedPlayers
         selectedPlayerID = nil
+        namingPlayerID = nil
+        playerNameDraft = ""
+        isNameEditorPresented = false
     }
 
     private func flipTeamSides() {
@@ -260,6 +410,29 @@ struct ContentView: View {
             }
         }
     }
+
+    private func savePlayerName() {
+        guard let index = namingPlayerIndex else { return }
+        let trimmed = playerNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        players[index].name = trimmed.isEmpty ? nil : trimmed
+        namingPlayerID = nil
+    }
+
+    private func clearPlayerName() {
+        guard let index = namingPlayerIndex else { return }
+        players[index].name = nil
+        playerNameDraft = ""
+        namingPlayerID = nil
+    }
+
+    private var namingPlayerIndex: Int? {
+        guard let namingPlayerID else { return nil }
+        return players.firstIndex { $0.id == namingPlayerID }
+    }
+
+    private func playerNameKey(team: TeamSide, number: Int) -> String {
+        "\(team == .home ? "H" : "A")-\(number)"
+    }
 }
 
 enum InteractionMode: CaseIterable {
@@ -270,6 +443,13 @@ enum InteractionMode: CaseIterable {
         switch self {
         case .draw: return "Draw"
         case .players: return "Players"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .draw: return "pencil.tip"
+        case .players: return "person.2.fill"
         }
     }
 }
@@ -284,6 +464,14 @@ enum DrawingMode: CaseIterable {
         case .ink: return "Ink"
         case .eraser: return "Eraser"
         case .lasso: return "Lasso"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .ink: return "pencil.line"
+        case .eraser: return "eraser"
+        case .lasso: return "lasso"
         }
     }
 }
@@ -346,13 +534,15 @@ struct PlayerToken: Identifiable {
     var number: Int
     var x: CGFloat
     var y: CGFloat
+    var name: String?
 
-    init(id: UUID = UUID(), team: TeamSide, number: Int, x: CGFloat, y: CGFloat) {
+    init(id: UUID = UUID(), team: TeamSide, number: Int, x: CGFloat, y: CGFloat, name: String? = nil) {
         self.id = id
         self.team = team
         self.number = number
         self.x = x
         self.y = y
+        self.name = name
     }
 }
 
@@ -376,6 +566,46 @@ struct TeamCountPill: View {
     }
 }
 
+struct IconControlButton: View {
+    let systemName: String
+    let accessibilityLabel: String
+    var tint: Color = .white
+    var isActive: Bool = false
+    var role: ButtonRole? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Group {
+            if let role {
+                Button(role: role, action: action) {
+                    buttonBody
+                }
+            } else {
+                Button(action: action) {
+                    buttonBody
+                }
+            }
+        }
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var buttonBody: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 17, weight: .semibold))
+            .symbolRenderingMode(.hierarchical)
+            .frame(width: 42, height: 42)
+            .foregroundStyle(isActive ? Color.black.opacity(0.85) : tint.opacity(0.95))
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isActive ? tint : Color.white.opacity(0.13))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
+            )
+    }
+}
+
 struct PlayerMarkerView: View {
     @Binding var player: PlayerToken
     let isSelected: Bool
@@ -383,14 +613,37 @@ struct PlayerMarkerView: View {
     let isEditable: Bool
     let homeColor: Color
     let awayColor: Color
+    let onLongPress: () -> Void
 
     private let markerSize: CGFloat = 36
 
     var body: some View {
         markerBody
             .frame(width: markerSize, height: markerSize)
+            .overlay(alignment: .bottom) {
+                if let playerName = displayName {
+                    Text(playerName)
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                        .allowsTightening(true)
+                        .minimumScaleFactor(0.6)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.black.opacity(0.6), in: Capsule())
+                        .offset(y: 20)
+                }
+            }
             .position(x: player.x * fieldSize.width, y: player.y * fieldSize.height)
             .gesture(dragGesture)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.45)
+                    .onEnded { _ in
+                        guard isEditable else { return }
+                        onLongPress()
+                    }
+            )
             .allowsHitTesting(isEditable)
             .shadow(color: .black.opacity(0.28), radius: 2, x: 0, y: 1)
     }
@@ -417,6 +670,13 @@ struct PlayerMarkerView: View {
                 player.x = clamp(value.location.x / max(fieldSize.width, 1), min: 0.04, max: 0.96)
                 player.y = clamp(value.location.y / max(fieldSize.height, 1), min: 0.04, max: 0.96)
             }
+    }
+
+    private var displayName: String? {
+        guard let playerName = player.name?.trimmingCharacters(in: .whitespacesAndNewlines), !playerName.isEmpty else {
+            return nil
+        }
+        return playerName
     }
 }
 
@@ -644,7 +904,72 @@ struct PencilCanvasRepresentable: UIViewRepresentable {
     }
 }
 
-struct CoachMenuSheet: View {
+struct DrawSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @Binding var drawingMode: DrawingMode
+    @Binding var inkStyle: InkStyle
+    @Binding var inkColor: Color
+    @Binding var strokeWidth: CGFloat
+    @Binding var strokeOpacity: Double
+
+    let clearDrawings: () -> Void
+    let undoDrawing: () -> Void
+    let redoDrawing: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Drawing Tools") {
+                    Picker("Mode", selection: $drawingMode) {
+                        ForEach(DrawingMode.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if drawingMode == .ink {
+                        Picker("Ink Style", selection: $inkStyle) {
+                            ForEach(InkStyle.allCases, id: \.self) { style in
+                                Text(style.title).tag(style)
+                            }
+                        }
+
+                        ColorPicker("Ink Color", selection: $inkColor)
+
+                        VStack(alignment: .leading) {
+                            Text("Stroke Width: \(Int(strokeWidth))")
+                            Slider(value: $strokeWidth, in: 1...24, step: 1)
+                        }
+
+                        VStack(alignment: .leading) {
+                            Text("Opacity: \(Int(strokeOpacity * 100))%")
+                            Slider(value: $strokeOpacity, in: 0.2...1, step: 0.05)
+                        }
+                    }
+                }
+
+                Section("Canvas Actions") {
+                    Button("Undo Drawing") { undoDrawing() }
+                    Button("Redo Drawing") { redoDrawing() }
+                    Button("Clear Drawings", role: .destructive) { clearDrawings() }
+                }
+            }
+            .navigationTitle("Draw Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+struct PlayerSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @Binding var homeTeamSize: Int
@@ -653,20 +978,11 @@ struct CoachMenuSheet: View {
     @Binding var awayFormation: Formation
     @Binding var homeTeamColor: Color
     @Binding var awayTeamColor: Color
-
-    @Binding var drawingMode: DrawingMode
-    @Binding var inkStyle: InkStyle
-    @Binding var inkColor: Color
-    @Binding var strokeWidth: CGFloat
-    @Binding var strokeOpacity: Double
     @Binding var notes: String
 
     let applyKickoffLineup: () -> Void
     let flipTeamSides: () -> Void
     let renumberTeams: () -> Void
-    let clearDrawings: () -> Void
-    let undoDrawing: () -> Void
-    let redoDrawing: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -722,41 +1038,9 @@ struct CoachMenuSheet: View {
                     ColorPicker("Away Color", selection: $awayTeamColor)
                 }
 
-                Section("Drawing") {
-                    Picker("Mode", selection: $drawingMode) {
-                        ForEach(DrawingMode.allCases, id: \.self) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    if drawingMode == .ink {
-                        Picker("Ink Style", selection: $inkStyle) {
-                            ForEach(InkStyle.allCases, id: \.self) { style in
-                                Text(style.title).tag(style)
-                            }
-                        }
-
-                        ColorPicker("Ink Color", selection: $inkColor)
-
-                        VStack(alignment: .leading) {
-                            Text("Stroke Width: \(Int(strokeWidth))")
-                            Slider(value: $strokeWidth, in: 1...24, step: 1)
-                        }
-
-                        VStack(alignment: .leading) {
-                            Text("Opacity: \(Int(strokeOpacity * 100))%")
-                            Slider(value: $strokeOpacity, in: 0.2...1, step: 0.05)
-                        }
-                    }
-                }
-
-                Section("Actions") {
-                    Button("Undo Drawing") { undoDrawing() }
-                    Button("Redo Drawing") { redoDrawing() }
+                Section("Team Actions") {
                     Button("Flip Team Sides") { flipTeamSides() }
                     Button("Renumber Both Teams") { renumberTeams() }
-                    Button("Clear Drawings", role: .destructive) { clearDrawings() }
                 }
 
                 Section("Tactical Notes") {
@@ -764,7 +1048,7 @@ struct CoachMenuSheet: View {
                         .frame(minHeight: 120)
                 }
             }
-            .navigationTitle("Coach Menu")
+            .navigationTitle("Player Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
